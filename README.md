@@ -49,7 +49,8 @@ Las notificaciones push en iPhone requieren **iOS 16.4+**, **HTTPS** y la app **
 
 ## Fuentes de datos
 
-- **Productos de marca, imágenes y códigos de barras:** [Open Food Facts](https://world.openfoodfacts.org) (datos abiertos, ODbL).
+- **Productos de supermercados peruanos:** Plaza Vea y Wong (API pública de catálogo VTEX), Tottus (API de búsqueda de su web) y Tambo (páginas de categoría). `node scripts/scrape-pe-stores.mjs` busca cada alimento genérico en las cadenas, lo asocia a su alimento, une los productos repetidos (por código de barras o por marca + tamaño + nombre) y guarda en qué cadenas aparece. No guarda precios. Después: `node scripts/build-seed.mjs`.
+- **Otros productos de marca y códigos de barras:** [Open Food Facts](https://world.openfoodfacts.org) (datos abiertos, ODbL).
 - **Imágenes de alimentos genéricos:** [TheMealDB](https://www.themealdb.com).
 - **Vida útil estimada:** basada en USDA FoodKeeper.
 - **Recetas:** resumidas con palabras propias; cada una enlaza a su receta original ([hora.es](https://www.hora.es/platos-peruanos-caseros/), [The Anthony Kitchen](https://www.theanthonykitchen.com/american-dinner-recipes/), BBC Good Food, Tasty).

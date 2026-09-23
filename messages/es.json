@@ -139,7 +139,9 @@
     "whatIsIt": "¿Qué alimento es?",
     "whatIsItHint": "Lo usamos para sugerirte recetas.",
     "none": "Ninguno",
-    "searchingProducts": "Buscando productos…"
+    "searchingProducts": "Buscando productos…",
+    "storesSection": "En supermercados",
+    "soldAt": "Se vende en"
   },
   "custom": {
     "title": "Crear alimento",

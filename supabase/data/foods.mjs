@@ -128,7 +128,7 @@ export const foods = [
   ["chicken", "Pollo (presas)", "Chicken pieces", "meat", "🍗", "Chicken", 2, "kg", ["pollo entero", "gallina"]],
   ["chicken_breast", "Pechuga de pollo", "Chicken breast", "meat", "🍗", "Chicken Breast", 2, "kg", ["pechuga"]],
   ["chicken_thighs", "Pierna / muslo de pollo", "Chicken thighs", "meat", "🍗", "Chicken Thighs", 2, "kg", ["encuentro", "muslos"]],
-  ["beef_sirloin", "Lomo de res", "Beef sirloin", "meat", "🥩", "Beef Fillet", 4, "kg", ["lomo fino", "bistec", "steak", "filete"]],
+  ["beef_sirloin", "Lomo de res", "Beef sirloin", "meat", "🥩", "Beef Fillet", 4, "kg", ["lomo fino", "bistec", "steak"]],
   ["beef_stew", "Carne de res para guiso", "Stewing beef", "meat", "🥩", "Beef", 4, "kg", ["asado", "sancochado", "chuck roast", "carne de res"]],
   ["ground_beef", "Carne molida", "Ground beef", "meat", "🥩", "Minced Beef", 2, "kg", ["carne picada"]],
   ["beef_heart", "Corazón de res", "Beef heart", "meat", "🫀", null, 2, "kg", ["anticucho"]],

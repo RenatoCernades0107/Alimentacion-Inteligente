@@ -17,6 +17,8 @@ import { addInventoryItem, createCustomFood } from "@/app/actions/inventory";
 import { UNITS } from "@/lib/units";
 import { localName, type Food, type Unit } from "@/lib/types";
 import type { OffProduct } from "@/lib/off";
+import { toProduct, type StoreId, type StoreProduct } from "@/lib/stores";
+import { StoreBadges } from "@/components/store-badges";
 
 type Selection = { kind: "food"; food: Food } | { kind: "product"; product: OffProduct };
 type Step = "search" | "scan" | "details" | "custom";
@@ -91,13 +93,18 @@ function SearchStep({
   // Cada resultado recuerda para qué búsqueda es, así no se muestran resultados viejos.
   const [foodResults, setFoodResults] = useState<{ q: string; foods: Food[] }>({ q: "", foods: [] });
   const [productResults, setProductResults] = useState<{ q: string; products: OffProduct[] }>({ q: "", products: [] });
+  const [storeResults, setStoreResults] = useState<{ q: string; products: OffProduct[] }>({ q: "", products: [] });
 
   useEffect(() => {
     if (!debounced) return;
     let cancelled = false;
-    createClient()
+    const supabase = createClient();
+    supabase
       .rpc("search_foods", { p_query: debounced, p_limit: 10 })
       .then(({ data }) => !cancelled && setFoodResults({ q: debounced, foods: (data as Food[]) ?? [] }));
+    supabase
+      .rpc("search_store_products", { p_query: debounced, p_limit: 15 })
+      .then(({ data }) => !cancelled && setStoreResults({ q: debounced, products: ((data as StoreProduct[]) ?? []).map(toProduct) }));
 
     if (debounced.length >= 3) {
       fetch(`/api/off/search?q=${encodeURIComponent(debounced)}&lang=${locale}`)
@@ -111,7 +118,10 @@ function SearchStep({
   }, [debounced, locale]);
 
   const foods = foodResults.q === debounced ? foodResults.foods : [];
-  const products = productResults.q === debounced ? productResults.products : [];
+  const storeProducts = storeResults.q === debounced ? storeResults.products : [];
+  // Los de Open Food Facts que ya salen como producto de supermercado no se repiten.
+  const storeCodes = new Set(storeProducts.map((p) => p.code).filter(Boolean));
+  const products = productResults.q === debounced ? productResults.products.filter((p) => !storeCodes.has(p.code)) : [];
   const loadingProducts = debounced.length >= 3 && productResults.q !== debounced;
   const custom = foods.filter((f) => f.family_id);
   const generic = foods.filter((f) => !f.family_id);
@@ -165,12 +175,28 @@ function SearchStep({
             </button>
           </ResultGroup>
 
+          {storeProducts.length > 0 && (
+            <ResultGroup title={t("storesSection")}>
+              {storeProducts.map((p) => (
+                <ResultRow
+                  key={p.id}
+                  image={p.image}
+                  emoji="🛒"
+                  title={p.name}
+                  subtitle={p.brand ?? undefined}
+                  stores={p.stores}
+                  onClick={() => onSelect({ kind: "product", product: p })}
+                />
+              ))}
+            </ResultGroup>
+          )}
+
           {(products.length > 0 || loadingProducts) && (
             <ResultGroup title={t("productsSection")}>
               {loadingProducts && products.length === 0 && <p className="p-2 text-sm text-muted-foreground">{t("searchingProducts")}</p>}
               {products.map((p) => (
                 <ResultRow
-                  key={p.code}
+                  key={p.code ?? p.name}
                   image={p.image}
                   emoji="📦"
                   title={p.name}
@@ -196,21 +222,23 @@ function ResultGroup({ title, children }: { title: string; children: React.React
 }
 
 function ResultRow({
-  image, emoji, title, subtitle, badge, onClick,
+  image, emoji, title, subtitle, badge, stores, onClick,
 }: {
   image: string | null;
   emoji: string | null;
   title: string;
   subtitle?: string;
   badge?: string;
+  stores?: StoreId[];
   onClick: () => void;
 }) {
   return (
     <button onClick={onClick} className="flex w-full items-center gap-3 rounded-xl p-2 text-left active:bg-muted">
       <FoodImage src={image} emoji={emoji} alt={title} />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{title}</div>
+        <div className="line-clamp-2 font-medium leading-snug">{title}</div>
         {subtitle && <div className="truncate text-sm text-muted-foreground">{subtitle}</div>}
+        {stores && stores.length > 0 && <StoreBadges stores={stores} className="mt-1" />}
       </div>
       {badge && <Badge variant="secondary">{badge}</Badge>}
     </button>
@@ -224,6 +252,10 @@ function ScanStep({ onFound, onNotFound }: { onFound: (p: OffProduct) => void; o
 
   async function lookup(code: string) {
     setLoading(true);
+    // Primero en los supermercados peruanos, luego en Open Food Facts.
+    const { data } = await createClient().from("store_products").select("*").contains("barcodes", [code]).limit(1);
+    const store = (data as StoreProduct[] | null)?.[0];
+    if (store) return onFound(toProduct(store));
     const res = await fetch(`/api/off/product/${code}?lang=${locale}`).then((r) => r.json()).catch(() => ({}));
     setLoading(false);
     if (res.product) onFound(res.product);
@@ -316,9 +348,15 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
     guessed.current = true;
     const words = selection.product.name.split(/\s+/).filter((w) => w.length > 2);
     const queries = [selection.product.name, ...words].slice(0, 4);
+    const knownId = selection.product.foodId;
     (async () => {
       const supabase = createClient();
       const seen = new Map<string, Food>();
+      // Los productos de supermercado ya vienen asociados a su alimento genérico.
+      if (knownId) {
+        const { data } = await supabase.from("foods").select("*").eq("id", knownId).single();
+        if (data) seen.set(data.id, data as Food);
+      }
       for (const q of queries) {
         const { data } = await supabase.rpc("search_foods", { p_query: q, p_limit: 4 });
         for (const f of (data as Food[]) ?? []) if (!seen.has(f.id)) seen.set(f.id, f);
@@ -367,6 +405,11 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
         <div className="min-w-0">
           <div className="font-semibold">{name}</div>
           {isProduct && selection.product.brand && <div className="text-sm text-muted-foreground">{selection.product.brand}</div>}
+          {isProduct && selection.product.stores?.length ? (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+              {ts("soldAt")} <StoreBadges stores={selection.product.stores} />
+            </div>
+          ) : null}
         </div>
       </div>
 

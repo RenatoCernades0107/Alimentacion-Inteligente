@@ -1,6 +1,6 @@
 // Genera supabase/seed.sql a partir de supabase/data/*.mjs
 // Uso: node scripts/build-seed.mjs
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { foods } from "../supabase/data/foods.mjs";
 import { recipes } from "../supabase/data/recipes.mjs";
 
@@ -42,10 +42,30 @@ for (const r of recipes) {
   sql += `\n) as v(key, qty, opt)\njoin foods f on f.key = v.key\njoin recipes r on r.slug = ${q(r.slug)};\n\n`;
 }
 
+// Productos de supermercados peruanos (scripts/scrape-pe-stores.mjs).
+const storeFile = new URL("../supabase/data/pe_store_products.json", import.meta.url);
+const storeProducts = existsSync(storeFile) ? JSON.parse(readFileSync(storeFile, "utf8")) : [];
+if (storeProducts.length) {
+  sql += "delete from store_products where country = 'PE';\n";
+  for (let i = 0; i < storeProducts.length; i += 200) {
+    sql += "insert into store_products (country, name, brand, barcodes, quantity, unit, pack, image_url, food_id, stores, store_urls)\n";
+    sql += "select 'PE', v.name, v.brand, v.barcodes, v.quantity, v.unit, v.pack, v.image_url, f.id, v.stores, v.store_urls::jsonb from (values\n";
+    sql += storeProducts
+      .slice(i, i + 200)
+      .map((p) => {
+        if (!foodByKey.has(p.food)) errors.push(`producto "${p.name}": alimento desconocido "${p.food}"`);
+        const urls = Object.fromEntries(p.stores.map((s) => [s.store, s.url]));
+        return `  (${q(p.name)}, ${q(p.brand)}, ${arr(p.barcodes)}, ${p.quantity ?? "null"}::numeric, ${q(p.unit)}, ${p.pack}, ${q(p.image)}, ${q(p.food)}, ${arr(p.stores.map((s) => s.store))}, ${q(JSON.stringify(urls))})`;
+      })
+      .join(",\n");
+    sql += "\n) as v(name, brand, barcodes, quantity, unit, pack, image_url, food_key, stores, store_urls)\nleft join foods f on f.key = v.food_key;\n\n";
+  }
+}
+
 if (errors.length) {
   console.error(errors.join("\n"));
   process.exit(1);
 }
 
 writeFileSync(new URL("../supabase/seed.sql", import.meta.url), sql);
-console.log(`seed.sql: ${foods.length} alimentos, ${recipes.length} recetas (${recipes.filter((r) => r.country === "PE").length} PE / ${recipes.filter((r) => r.country === "US").length} US)`);
+console.log(`seed.sql: ${foods.length} alimentos, ${recipes.length} recetas (${recipes.filter((r) => r.country === "PE").length} PE / ${recipes.filter((r) => r.country === "US").length} US), ${storeProducts.length} productos de supermercados`);

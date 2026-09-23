@@ -139,7 +139,9 @@
     "whatIsIt": "What food is it?",
     "whatIsItHint": "We use it to suggest recipes.",
     "none": "None",
-    "searchingProducts": "Searching products…"
+    "searchingProducts": "Searching products…",
+    "storesSection": "In supermarkets",
+    "soldAt": "Sold at"
   },
   "custom": {
     "title": "Create food",

@@ -1,14 +1,20 @@
 import type { Unit } from "./types";
+import type { StoreId } from "./stores";
 
-/** Producto de Open Food Facts normalizado. */
+/** Producto de marca normalizado (de Open Food Facts o de un supermercado). */
 export type OffProduct = {
-  code: string;
+  id?: string;
+  code: string | null;
   name: string;
   brand: string | null;
   image: string | null;
   quantity: number | null;
   unit: Unit | null;
   categories: string[];
+  /** Alimento genérico ya conocido (productos de supermercado). */
+  foodId?: string | null;
+  /** Cadenas donde se vende (productos de supermercado). */
+  stores?: StoreId[];
 };
 
 export const OFF_USER_AGENT = "AlimentacionInteligente/0.1 (prototype)";

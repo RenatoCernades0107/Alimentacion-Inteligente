@@ -3,7 +3,8 @@
 Ver [specs.md](specs.md) para los requerimientos y [README.md](README.md) para levantar el proyecto.
 
 ## Fuentes de datos (investigado)
-- **Productos empaquetados + imágenes + código de barras:** Open Food Facts (gratis, sin API key, tiene productos de Perú y USA).
+- **Productos de supermercados peruanos:** Plaza Vea, Wong, Tottus y Tambo, unidos entre cadenas y con las tiendas donde se venden.
+- **Productos empaquetados + imágenes + código de barras (resto):** Open Food Facts (gratis, sin API key).
 - **Insumos genéricos con imagen:** catálogo propio de 140 alimentos (es/en) con imágenes de TheMealDB y emoji de respaldo.
 - **Vida útil estimada de genéricos:** días según USDA FoodKeeper.
 - **Recetas:** 57 recetas propias (28 Perú / 29 USA) con ingredientes mapeados al catálogo y link a la receta original.
