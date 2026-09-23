@@ -7,7 +7,7 @@ export const ALL_SLOTS: MealSlot[] = ["breakfast", "morning_snack", "lunch", "af
 /** Franjas del día según cuántas comidas hace la familia. */
 export function slotsFor(mealsPerDay: number): MealSlot[] {
   if (mealsPerDay >= 5) return ALL_SLOTS;
-  if (mealsPerDay === 4) return ["breakfast", "lunch", "afternoon_snack", "dinner"];
+  if (mealsPerDay === 4) return ["breakfast", "morning_snack", "lunch", "dinner"];
   return ["breakfast", "lunch", "dinner"];
 }
 
