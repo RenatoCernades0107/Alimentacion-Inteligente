@@ -3,14 +3,14 @@
 // Resultado: supabase/data/pe_store_products.json (luego: node scripts/build-seed.mjs)
 //
 // Uso:
-//   node scripts/scrape-pe-stores.mjs            consulta las tiendas (~5 min) y guarda caché
+//   node scripts/scrape-pe-stores.mjs            recorre las categorías de comida (~10 min) y guarda caché
 //   node scripts/scrape-pe-stores.mjs --cached   reprocesa la última consulta (para ajustar reglas)
+//   … --unmatched                                  además lista los productos sin alimento (para ampliar foods.mjs)
 // No guarda precios.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { foods } from "../supabase/data/foods.mjs";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
-const PER_TERM = 20;
 const DELAY_MS = 350;
 const CACHE = new URL("../node_modules/.cache/pe-stores-raw.json", import.meta.url);
 const ORDER = ["plazavea", "wong", "tottus", "tambo"];
@@ -55,9 +55,13 @@ const toBase = (q, u) => (q == null ? null : u === "kg" || u === "l" ? q * 1000 
 // Cada alimento aporta frases (nombre y alias en español). Un producto corresponde a la
 // frase cuya primera palabra ABRE el nombre del producto ("Leche Gloria Evaporada" → leche
 // evaporada), así se evitan sabores y usos: "Lavavajilla Limón", "Gelatina sabor durazno".
+// Las palabras de enlace no se exigen: "Galletas de soda" también reconoce "Galletas Soda Field".
+const CONNECTORS = new Set("de del la el los las y e en con para al a".split(" "));
 const phrases = [];
 for (const [key, es, , , , , , , aliases] of foods) {
-  const parts = [es, ...es.split(/[/(]/), ...aliases].map((p) => words(p.replace(/\)/g, ""))).filter((w) => w.join(" ").length >= 3);
+  const parts = [es, ...es.split(/[/(]/), ...aliases]
+    .map((p) => words(p.replace(/\)/g, "")).filter((x, i) => i === 0 || !CONNECTORS.has(x)))
+    .filter((w) => w.join(" ").length >= 2);
   const seen = new Set();
   for (const w of parts) {
     const k = w.join(" ");
@@ -68,16 +72,20 @@ for (const [key, es, , , , , , , aliases] of foods) {
 }
 phrases.sort((a, b) => b.words.length - a.words.length || b.len - a.len);
 
-// Palabras que pueden ir antes del alimento sin cambiar lo que es ("Pack 2 …", "Filete de …").
-const LEADING = /^(pack\d*|promo|oferta|combo|x\d*|\d+|filete|filetes|trozo|trozos|presa|presas|cubo|cubos|bandeja|de|del|la|el)$/;
+// Palabras que pueden ir antes del alimento sin cambiar lo que es ("Pack 2u …", "Sixpack …", "Filete de …").
+const LEADING = /^(pack\w*|sixpack|twopack|tripack|fourpack|twelvepack|multipack|six|duo|mini|minis|mix|promo|oferta|combo|caja|x\d*|\d+\w*|filete|filetes|trozo|trozos|presa|presas|porcion|porciones|tira|tiras|cubo|cubos|bandeja|ahorrador|de|del|la|el|y)$/;
 
-// Productos que no son insumos de cocina aunque empiecen con el nombre de uno.
-const EXCLUDE = /\b(snacks?|piqueos?|chizitos?|golosinas?|caramelos?|chupetin(es)?|gomitas?|helados?|shampoo|jabon(es)?|detergentes?|limpia\w*|mascotas?|perros?|gatos?|panal(es)?|toallitas?|formula|bebes?|infantil|licor(es)?|cervezas?|vinos?|pisco|ron|vodka|whisky|energizantes?|gaseosas?|juguetes?|velas?|colonias?|desodorantes?|suplementos?|sopa instantanea|ajinomen|galletas? de|resaltador|enchufe|malla protectora|chips|papas? sabor|papas? al hilo|papas? nativas? fritas|papas? fritas sabor)\b/;
+// Lo que no es comida (o no es para la despensa familiar) aunque empiece con el nombre de un alimento.
+const EXCLUDE = /\b(shampoo|jalea real|polen|enfagrow|sustagen|jabon(es)?|detergentes?|limpia\w*|mascotas?|(comida|alimento|snacks?) (para )?(perros?|gatos?)|panal(es)?|toallitas?|formula|formulas|infantil|licor(es)?|cervezas?|vinos?|pisco|ron|vodka|whisky|gin|rtd|energizantes?|gaseosas?|juguetes?|velas?|colonias?|desodorantes?|suplementos?|complemento alimenticio|proteina|proteinas|vitaminas?|preservativos?|vapeador|resaltador|enchufe|malla protectora|ramo de flores|arreglo floral|juego de mesa|taza ceramica|papel higienico)\b/;
+
+// Snacks hechos de verduras: "Papas Inka Chips", "Camote frito", "Yuca en hojuelas" no son la verdura.
+const SNACK_HINT = /\b(chips|hojuelas|al hilo|sabor|onduladas|ondas|kettle|lays?|pringles|inka|kryzpo|papi|voraz|jappy|tiyapuy|frito|fritos|fritas)\b/;
+const SNACKABLE = new Set(["potato", "yellow_potato", "sweet_potato", "yuca", "plantain", "banana"]);
 
 // Categorías de la tienda que no son comida.
 const BAD_CATEGORY = /limpieza|mascota|bebe|cuidado|belleza|hogar|electro|juguet|librer|licor|cerveza|farmacia|ropa|tecnolog|bazar|ferreter|salud|deporte|automotriz|jardin|bebidas alcoholicas/;
-// Tottus: J01 abarrotes, J03 carnes/pescados/fiambres, J04 frutas y verduras, J05 panadería.
-const TOTTUS_FOOD = /^J0(1(0[013-9]|[1-9]\d)|3|4|5)/;
+// Tottus: J01 abarrotes, J03 carnes/pescados, J04 frutas y verduras, J05 lácteos/fiambres/congelados, J06 panadería, J07 cremas.
+const TOTTUS_FOOD = /^J0(1(0[013-9]|[1-9]\d)|3|4|5|6|7)/;
 
 function matchFood(item) {
   const n = norm(item.name);
@@ -92,7 +100,8 @@ function matchFood(item) {
   for (const p of phrases) {
     if (!sameWord(p.words[0], w[start])) continue;
     const rest = w.slice(start + 1);
-    if (p.words.slice(1).every((pw) => rest.some((x) => sameWord(pw, x)))) return p.key;
+    if (!p.words.slice(1).every((pw) => rest.some((x) => sameWord(pw, x)))) continue;
+    return SNACKABLE.has(p.key) && SNACK_HINT.test(n) && !/congelad|prefrit|pre frit/.test(n) ? "chips" : p.key;
   }
   return null;
 }
@@ -110,41 +119,95 @@ async function getJSON(url) {
   return null;
 }
 
+// Se recorren completas las categorías de comida de cada cadena (no solo búsquedas por nombre),
+// así aparecen también los alimentos que aún no están en el catálogo (ver --unmatched).
+
 /** Plaza Vea y Wong usan VTEX (API pública de catálogo). */
-function vtex(store, host) {
-  return async (term) => {
-    const data = await getJSON(`https://${host}/api/catalog_system/pub/products/search?ft=${encodeURIComponent(term)}&_from=0&_to=${PER_TERM - 1}`);
-    return (data ?? []).map((p) => {
-      const item = p.items?.[0] ?? {};
-      return {
-        store,
-        name: p.productName,
-        brand: p.brand || null,
-        barcode: /^\d{8,14}$/.test(item.ean ?? "") ? item.ean : null,
-        image: item.images?.[0]?.imageUrl?.split("?")[0] ?? null,
-        url: p.link ?? null,
-        category: p.categories?.[0] ?? "",
-      };
-    });
+const VTEX_STORES = {
+  // Frutas y verduras, abarrotes, desayunos, panadería, quesos y fiambres, carnes, lácteos, congelados.
+  plazavea: { host: "www.plazavea.com.pe", categories: [77, 431, 478, 493, 621, 814, 845, 210] },
+  // Frutas y verduras, congelados, embutidos, abarrotes, desayuno, carnes, panadería, lácteos.
+  wong: { host: "www.wong.pe", categories: [800, 1200, 1400, 1700, 1001253, 1001327, 1001374, 1001436] },
+};
+const VTEX_MAX = 2500; // la API no pagina más allá: las categorías más grandes se recorren por subcategoría
+
+const vtexItem = (store) => (p) => {
+  const item = p.items?.[0] ?? {};
+  return {
+    store,
+    name: p.productName,
+    brand: p.brand || null,
+    barcode: /^\d{8,14}$/.test(item.ean ?? "") ? item.ean : null,
+    image: item.images?.[0]?.imageUrl?.split("?")[0] ?? null,
+    url: p.link ?? null,
+    category: p.categories?.[0] ?? "",
   };
+};
+
+async function vtexAll(store) {
+  const { host, categories } = VTEX_STORES[store];
+  const tree = (await getJSON(`https://${host}/api/catalog_system/pub/category/tree/3`)) ?? [];
+  const findNode = (nodes, id) => {
+    for (const n of nodes) {
+      const found = n.id === id ? n : findNode(n.children ?? [], id);
+      if (found) return found;
+    }
+    return null;
+  };
+  const out = [];
+  async function crawl(path, id) {
+    const base = `https://${host}/api/catalog_system/pub/products/search?fq=C:${path}`;
+    for (let from = 0; from < VTEX_MAX; from += 50) {
+      const page = await getJSON(`${base}&_from=${from}&_to=${from + 49}`);
+      await sleep(DELAY_MS);
+      if (!page?.length) return;
+      out.push(...page.map(vtexItem(store)));
+      if (page.length < 50) return;
+    }
+    // Llegó al límite: seguir por subcategorías.
+    const children = findNode(tree, id)?.children ?? [];
+    if (!children.length) console.warn(`  ${store}: ${path} supera ${VTEX_MAX} productos y no tiene subcategorías`);
+    for (const c of children) await crawl(`${path}${c.id}/`, c.id);
+  }
+  for (const id of categories) {
+    await crawl(`/${id}/`, id);
+    console.log(`  ${store}: categoría ${id} → ${out.length} productos acumulados`);
+  }
+  return out;
 }
 
-async function tottus(term) {
-  const data = await getJSON(`https://www.tottus.com.pe/s/browse/v1/search/pe?Ntt=${encodeURIComponent(term)}`);
-  return (data?.data?.results ?? []).slice(0, PER_TERM).map((p) => ({
-    store: "tottus",
-    name: p.displayName,
-    brand: p.brand ? p.brand.charAt(0) + p.brand.slice(1).toLowerCase() : null,
-    barcode: null,
-    image: p.mediaUrls?.[0] ?? null,
-    url: p.url ?? null,
-    category: "",
-    categoryId: p.merchantCategoryId ?? "",
-  }));
+/** Tottus: listado por categoría (48 por página). */
+// Frutas y verduras, abarrotes, carnes, desayunos, huevos y fiambres, lácteos, panadería, congelados, repostería, snacks.
+const TOTTUS_CATEGORIES = ["CATG16050", "CATG16066", "CATG16076", "CATG16065", "CATG16060", "CATG16061", "CATG16071", "CATG16062", "CATG16056", "CATG16058"];
+async function tottusAll() {
+  const out = [];
+  for (const cat of TOTTUS_CATEGORIES) {
+    for (let page = 1; ; page++) {
+      const data = await getJSON(`https://www.tottus.com.pe/s/browse/v1/listing/pe?categoryId=${cat}&page=${page}`);
+      await sleep(DELAY_MS);
+      const results = data?.data?.results ?? [];
+      out.push(
+        ...results.map((p) => ({
+          store: "tottus",
+          name: p.displayName,
+          brand: p.brand ? p.brand.charAt(0) + p.brand.slice(1).toLowerCase() : null,
+          barcode: null,
+          image: p.mediaUrls?.[0] ?? null,
+          url: p.url ?? null,
+          category: "",
+          categoryId: p.merchantCategoryId ?? "",
+        })),
+      );
+      const { count = 0, perPage = 48 } = data?.data?.pagination ?? {};
+      if (!results.length || page * perPage >= count) break;
+    }
+    console.log(`  tottus: ${cat} → ${out.length} productos acumulados`);
+  }
+  return out;
 }
 
 /** Tambo (plataforma Justo): los productos vienen embebidos en las páginas de categoría. */
-const TAMBO_CATEGORIES = ["despensa/5gSmKE2b3w48nYSsX", "marcas-tambo/He6rbj2uKojnCkZ9Z", "originales-de-tambo/PQ2XHZ4jJLnMHaWek"];
+const TAMBO_CATEGORIES = ["despensa/5gSmKE2b3w48nYSsX", "marcas-tambo/He6rbj2uKojnCkZ9Z", "originales-de-tambo/PQ2XHZ4jJLnMHaWek", "snacks-confiteria/jPBNxZZ8qwwMrdrKb"];
 async function tamboAll() {
   const out = new Map();
   for (const cat of TAMBO_CATEGORIES) {
@@ -159,7 +222,8 @@ async function tamboAll() {
     while ((m = re.exec(html))) {
       const chunk = html.slice(m.index, m.index + 5000);
       if (!chunk.includes('"externalId"')) continue;
-      const cats = [...chunk.matchAll(/\{"_id":"\w+","name":"([^"]+)","index"/g)].map((x) => x[1]).join("/");
+      // Sin categoría: en el HTML las categorías de un producto se mezclan con las del siguiente
+      // ("Yogurt Gloria" aparecía en "Mascotas"); basta con que el nombre empiece con un alimento.
       out.set(m[1], {
         store: "tambo",
         name: JSON.parse(`"${m[2]}"`),
@@ -167,7 +231,7 @@ async function tamboAll() {
         barcode: null,
         image: chunk.match(/"smallURL":"([^"]+)"/)?.[1] ?? null,
         url: "https://www.tambo.pe/pedir",
-        category: cats,
+        category: "",
       });
     }
     await sleep(DELAY_MS);
@@ -176,26 +240,9 @@ async function tamboAll() {
 }
 
 async function fetchAll() {
-  const terms = [...new Set(foods.map(([, es]) => norm(es.split(/[/(]/)[0])))];
-  const sources = [
-    ["plazavea", vtex("plazavea", "www.plazavea.com.pe")],
-    ["wong", vtex("wong", "www.wong.pe")],
-    ["tottus", tottus],
-  ];
-  console.log(`Buscando ${terms.length} términos en ${sources.length} tiendas + Tambo…`);
-  const raw = [];
-  await Promise.all(
-    sources.map(async ([store, search]) => {
-      let n = 0;
-      for (const term of terms) {
-        raw.push(...(await search(term)));
-        if (++n % 20 === 0) console.log(`  ${store}: ${n}/${terms.length}`);
-        await sleep(DELAY_MS);
-      }
-    }),
-  );
-  raw.push(...(await tamboAll()));
-  return raw;
+  console.log("Recorriendo las categorías de comida de Plaza Vea, Wong, Tottus y Tambo…");
+  const parts = await Promise.all([vtexAll("plazavea"), vtexAll("wong"), tottusAll(), tamboAll()]);
+  return parts.flat();
 }
 
 // ───────────────────────── Unir repetidos ─────────────────────────
@@ -281,12 +328,30 @@ if (process.argv.includes("--cached") && existsSync(CACHE)) {
 // Asociar a un alimento y quitar duplicados exactos (mismo producto encontrado con dos términos).
 const seen = new Set();
 const matched = [];
+const unmatched = [];
 for (const r of raw) {
   const k = `${r.store}|${r.barcode ?? norm(r.name)}`;
   if (seen.has(k)) continue;
   seen.add(k);
   const food = matchFood(r);
   if (food) matched.push({ ...r, food });
+  else unmatched.push(r);
+}
+
+// --unmatched: lista los productos sin alimento, agrupados por la palabra con que empiezan,
+// para descubrir alimentos que faltan en supabase/data/foods.mjs.
+if (process.argv.includes("--unmatched")) {
+  const byWord = new Map();
+  for (const r of unmatched) {
+    const w = words(r.name)[0] ?? "";
+    if (!byWord.has(w)) byWord.set(w, []);
+    byWord.get(w).push(`${r.store}\t${r.category || r.categoryId || ""}\t${r.name}`);
+  }
+  const lines = [...byWord].sort((a, b) => b[1].length - a[1].length).flatMap(([w, list]) => [`## ${w} (${list.length})`, ...list.slice(0, 8)]);
+  const file = new URL("../node_modules/.cache/pe-stores-unmatched.txt", import.meta.url);
+  writeFileSync(file, lines.join("\n"));
+  writeFileSync(new URL("../node_modules/.cache/pe-stores-unmatched.json", import.meta.url), JSON.stringify(unmatched));
+  console.log(`${unmatched.length} productos sin alimento → ${file.pathname}`);
 }
 
 const products = merge(matched).sort((a, b) => b.stores.length - a.stores.length || a.name.localeCompare(b.name));
