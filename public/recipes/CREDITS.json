@@ -154,5 +154,179 @@
     "page": "https://commons.wikimedia.org/wiki/File:Cooked_oatmeal_in_bowl.jpg",
     "author": "Bodhi Peace",
     "license": "CC BY-SA 4.0"
+  },
+  "pancakes": {
+    "file": "File:Foodiesfeed.com pouring-honey-on-pancakes-with-walnuts.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Foodiesfeed.com_pouring-honey-on-pancakes-with-walnuts.jpg",
+    "author": "Mae Mu",
+    "license": "CC0"
+  },
+  "eggs-and-bacon": {
+    "file": "File:Eggs and bacon.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Eggs_and_bacon.jpg",
+    "author": "Jon Sullivan",
+    "license": "Public domain"
+  },
+  "buttermilk-biscuits": {
+    "file": "File:Loveless Cafe Biscuits.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Loveless_Cafe_Biscuits.jpg",
+    "author": "Dale Cruse",
+    "license": "CC BY 2.0"
+  },
+  "oatmeal": {
+    "file": "File:Banana Oatmeal Breakfast Bowl (44302857265).jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Banana_Oatmeal_Breakfast_Bowl_(44302857265).jpg",
+    "author": "Ella Olsson from Stockholm, Sweden",
+    "license": "CC BY 2.0"
+  },
+  "meatloaf": {
+    "file": "File:MeatloafWithSauce.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:MeatloafWithSauce.jpg",
+    "author": "Renee Comet (photographer)",
+    "license": "Public domain"
+  },
+  "pot-roast": {
+    "file": "File:American pot roast.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:American_pot_roast.jpg",
+    "author": "Mark Miller",
+    "license": "CC BY-SA 4.0"
+  },
+  "texas-chili": {
+    "file": "File:Bowl of chili.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Bowl_of_chili.jpg",
+    "author": "Carstor",
+    "license": "CC BY-SA 2.5"
+  },
+  "mac-and-cheese": {
+    "file": "File:Original Mac n Cheese .jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Original_Mac_n_Cheese_.jpg",
+    "author": "Texasfoodgawker",
+    "license": "CC BY-SA 4.0"
+  },
+  "fried-chicken": {
+    "file": "File:Fried-Chicken-Set.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Fried-Chicken-Set.jpg",
+    "author": "Evan-Amos",
+    "license": "CC0"
+  },
+  "chicken-pot-pie": {
+    "file": "File:ChickenpotpieswholeFeb09.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:ChickenpotpieswholeFeb09.jpg",
+    "author": "avlxyz at https://www.flickr.com/photos/avlxyz/",
+    "license": "CC BY-SA 2.0"
+  },
+  "chicken-and-dumplings": {
+    "file": "File:Mmm... chicken dumplings (7867591472).jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Mmm..._chicken_dumplings_(7867591472).jpg",
+    "author": "jeffreyw",
+    "license": "CC BY 2.0"
+  },
+  "beef-stew": {
+    "file": "File:Beef stew 2.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Beef_stew_2.jpg",
+    "author": "3steph14",
+    "license": "CC BY-SA 4.0"
+  },
+  "spaghetti-meatballs": {
+    "file": "File:Spaghetti and meatballs 1.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Spaghetti_and_meatballs_1.jpg",
+    "author": "jeffreyw",
+    "license": "CC BY 2.0"
+  },
+  "lasagna": {
+    "file": "File:Lasagne - stonesoup.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Lasagne_-_stonesoup.jpg",
+    "author": "jules / stonesoup",
+    "license": "CC BY 2.0"
+  },
+  "cheeseburgers": {
+    "file": "File:Cheeseburger.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Cheeseburger.jpg",
+    "author": "Renee Comet (photographer)",
+    "license": "Public domain"
+  },
+  "grilled-cheese": {
+    "file": "File:Grilled cheese sandwich.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Grilled_cheese_sandwich.jpg",
+    "author": "Maggie Hoffman",
+    "license": "CC BY 2.0"
+  },
+  "tomato-soup": {
+    "file": "File:Tomato soup.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Tomato_soup.jpg",
+    "author": "Stu Spivack",
+    "license": "CC BY-SA 2.0"
+  },
+  "pulled-pork": {
+    "file": "File:Pulled pork while pulling.JPG",
+    "page": "https://commons.wikimedia.org/wiki/File:Pulled_pork_while_pulling.JPG",
+    "author": "Thogru",
+    "license": "CC BY-SA 3.0"
+  },
+  "smothered-pork-chops": {
+    "file": "File:Smothered Pork Chop, Red Beans and Rice, Green Beans, Cabbage and Corn Bread.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Smothered_Pork_Chop,_Red_Beans_and_Rice,_Green_Beans,_Cabbage_and_Corn_Bread.jpg",
+    "author": "Paul Lowry",
+    "license": "CC BY 4.0"
+  },
+  "steak-fajitas": {
+    "file": "File:Lunch steak fajita, El Cazador.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Lunch_steak_fajita,_El_Cazador.jpg",
+    "author": "Michael Rivera",
+    "license": "CC BY-SA 4.0"
+  },
+  "shrimp-and-grits": {
+    "file": "File:Shrimp and grits at the Green Goddess.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Shrimp_and_grits_at_the_Green_Goddess.jpg",
+    "author": "Jason Riedy",
+    "license": "CC BY 2.0"
+  },
+  "salmon-dill": {
+    "file": "File:Salmon with Dill Sauce (2466256513).jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Salmon_with_Dill_Sauce_(2466256513).jpg",
+    "author": "Mack Male from Edmonton, AB, Canada",
+    "license": "CC BY-SA 2.0"
+  },
+  "oven-baked-chicken": {
+    "file": "File:Max's Roasted Chicken - Evan Swigart.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Max%27s_Roasted_Chicken_-_Evan_Swigart.jpg",
+    "author": "Evan Swigart from Chicago, USA",
+    "license": "CC BY 2.0"
+  },
+  "red-beans-and-rice": {
+    "file": "File:Red Beans and Rice.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Red_Beans_and_Rice.jpg",
+    "author": "Arnold Gatilao from Fremont, CA, USA",
+    "license": "CC BY 2.0"
+  },
+  "chicken-broccoli-rice-casserole": {
+    "file": "File:Chicken Divan.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Chicken_Divan.jpg",
+    "author": "tengrrl from Blacksburg, VA, United States",
+    "license": "CC BY-SA 2.0"
+  },
+  "club-sandwich": {
+    "file": "File:Club sandwich at Café Picnic.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Club_sandwich_at_Caf%C3%A9_Picnic.jpg",
+    "author": "JIP",
+    "license": "CC BY-SA 4.0"
+  },
+  "potato-salad": {
+    "file": "File:Potato salad (1).jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Potato_salad_(1).jpg",
+    "author": "SajjadF",
+    "license": "CC BY-SA 3.0"
+  },
+  "cornbread": {
+    "file": "File:Skillet cornbread (cropped).jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Skillet_cornbread_(cropped).jpg",
+    "author": "Zankopedia",
+    "license": "CC BY-SA 3.0"
+  },
+  "peanut-butter-cookies": {
+    "file": "File:Peanut butter cookies, September 2009.jpg",
+    "page": "https://commons.wikimedia.org/wiki/File:Peanut_butter_cookies,_September_2009.jpg",
+    "author": "Janet Hudson",
+    "license": "CC BY 2.0"
   }
 }
