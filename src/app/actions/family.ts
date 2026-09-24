@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession, requireMember, requireParent } from "@/lib/session";
+import { isAvatarId } from "@/lib/avatars";
 import type { Role } from "@/lib/types";
 
 const ONE_YEAR = 60 * 60 * 24 * 365;
@@ -30,15 +31,22 @@ export async function createFamily(formData: FormData) {
   if (error) throw new Error(error.message);
 
   await session.supabase.from("profiles").update({ locale }).eq("id", session.user.id);
+  const avatar = formData.get("avatar");
+  if (isAvatarId(avatar)) {
+    await session.supabase.rpc("set_member_avatar", { p_user: session.user.id, p_avatar: avatar });
+  }
   await setLocaleCookie(locale);
   redirect("/");
 }
 
-export async function acceptInvite(token: string) {
+export async function acceptInvite(token: string, avatar?: string | null) {
   const session = await getSession();
   if (!session) redirect(`/login?next=/invite/${token}`);
   const { error } = await session.supabase.rpc("accept_invite", { p_token: token });
   if (error) return { error: error.message };
+  if (isAvatarId(avatar)) {
+    await session.supabase.rpc("set_member_avatar", { p_user: session.user.id, p_avatar: avatar });
+  }
   await setLocaleCookie(session.profile.locale);
   redirect("/");
 }
@@ -73,6 +81,15 @@ export async function removeMember(userId: string) {
   const { error } = await supabase.rpc("remove_member", { p_user: userId });
   if (error) throw new Error(error.message);
   revalidatePath("/family");
+}
+
+/** Cambia el avatar propio o (si es padre/madre) el de un hijo. null = sin avatar. */
+export async function setMemberAvatar(userId: string, avatar: string | null) {
+  const { supabase } = await requireMember();
+  if (avatar !== null && !isAvatarId(avatar)) throw new Error("invalid avatar");
+  const { error } = await supabase.rpc("set_member_avatar", { p_user: userId, p_avatar: avatar });
+  if (error) throw new Error(error.message);
+  revalidatePath("/", "layout");
 }
 
 export async function signOut() {

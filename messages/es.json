@@ -104,7 +104,8 @@
     "proposals": "Propuestas de tus hijos",
     "pendingCompletion": "Comidas sin marcar",
     "pendingCompletionHint": "¿Ya las cocinaron? Márcalas como completadas para actualizar el inventario.",
-    "inviteTitle": "Invita a tu familia"
+    "inviteTitle": "Invita a tu familia",
+    "profile": "Mi perfil"
   },
   "inventory": {
     "title": "Alimentos",
@@ -174,12 +175,39 @@
     "completedToast": "¡Listo! Se descontaron los ingredientes.",
     "usedIngredients": "Se descontó: {list}",
     "missingIngredients": "No estaban en el inventario: {list}",
+    "shortIngredients": "No alcanzó todo lo de: {list}",
     "proposalSent": "Propuesta enviada a tus padres",
     "proposedBy": "Propuesta por {name}",
     "empty": "Sin planificar",
     "viewRecipe": "Ver receta",
     "repeats": "Se repite",
     "childHint": "Puedes proponer comidas. Tus padres deben aceptarlas."
+  },
+  "mealItems": {
+    "title": "Ingredientes",
+    "edit": "Editar",
+    "editTitle": "Ingredientes de la comida",
+    "edited": "Editados para esta comida",
+    "editedSeries": "Editados para toda la recurrencia",
+    "empty": "Sin ingredientes. Agrega alimentos para descontarlos del inventario al completar la comida.",
+    "emptyEditor": "No hay ingredientes. Agrega alimentos si quieres que se descuenten del inventario.",
+    "hint": "Quita lo que no vas a usar o cambia las porciones. Al completar la comida solo se descuenta lo que haya en el inventario.",
+    "inStock": "En el inventario",
+    "notInStock": "No hay",
+    "onlyHave": "Solo hay {amount}",
+    "toTaste": "Al gusto",
+    "optional": "opcional",
+    "portions": "Porciones",
+    "halve": "Reducir a la mitad",
+    "double": "Duplicar",
+    "quantity": "Cantidad de {name}",
+    "unit": "Unidad de {name}",
+    "remove": "Quitar {name}",
+    "add": "Agregar alimento",
+    "searchFood": "Buscar alimento…",
+    "noResults": "Sin resultados",
+    "alreadyAdded": "{name} ya está en la lista",
+    "reset": "Restablecer"
   },
   "recipes": {
     "title": "Recetas",
@@ -211,6 +239,16 @@
     "notifications": "Notificaciones",
     "signOut": "Cerrar sesión",
     "familyName": "Nombre de la familia"
+  },
+  "avatar": {
+    "choose": "Elige tu avatar",
+    "subtitle": "Escoge el personaje que más te guste. Puedes cambiarlo cuando quieras.",
+    "titleSelf": "Tu avatar",
+    "titleOther": "Avatar de {name}",
+    "option": "Avatar {number}",
+    "changeSelf": "Cambiar mi avatar",
+    "changeOther": "Cambiar el avatar de {name}",
+    "reset": "Quitar avatar"
   },
   "push": {
     "enable": "Activar notificaciones",

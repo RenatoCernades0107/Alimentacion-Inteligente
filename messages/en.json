@@ -104,7 +104,8 @@
     "proposals": "Proposals from your kids",
     "pendingCompletion": "Unmarked meals",
     "pendingCompletionHint": "Did you cook them? Mark them as done to update the inventory.",
-    "inviteTitle": "Invite your family"
+    "inviteTitle": "Invite your family",
+    "profile": "My profile"
   },
   "inventory": {
     "title": "Food",
@@ -174,12 +175,39 @@
     "completedToast": "Done! Ingredients were deducted.",
     "usedIngredients": "Deducted: {list}",
     "missingIngredients": "Not in inventory: {list}",
+    "shortIngredients": "Not enough: {list}",
     "proposalSent": "Proposal sent to your parents",
     "proposedBy": "Proposed by {name}",
     "empty": "Not planned",
     "viewRecipe": "View recipe",
     "repeats": "Repeats",
     "childHint": "You can propose meals. Your parents need to accept them."
+  },
+  "mealItems": {
+    "title": "Ingredients",
+    "edit": "Edit",
+    "editTitle": "Meal ingredients",
+    "edited": "Edited for this meal",
+    "editedSeries": "Edited for the whole series",
+    "empty": "No ingredients. Add foods to deduct them from inventory when the meal is completed.",
+    "emptyEditor": "No ingredients. Add foods if you want them deducted from inventory.",
+    "hint": "Remove what you won't use or change the portions. When the meal is completed, only what's in inventory is deducted.",
+    "inStock": "In inventory",
+    "notInStock": "Out of stock",
+    "onlyHave": "Only {amount} left",
+    "toTaste": "To taste",
+    "optional": "optional",
+    "portions": "Portions",
+    "halve": "Halve",
+    "double": "Double",
+    "quantity": "Quantity of {name}",
+    "unit": "Unit of {name}",
+    "remove": "Remove {name}",
+    "add": "Add food",
+    "searchFood": "Search food…",
+    "noResults": "No results",
+    "alreadyAdded": "{name} is already in the list",
+    "reset": "Reset"
   },
   "recipes": {
     "title": "Recipes",
@@ -211,6 +239,16 @@
     "notifications": "Notifications",
     "signOut": "Sign out",
     "familyName": "Family name"
+  },
+  "avatar": {
+    "choose": "Choose your avatar",
+    "subtitle": "Pick the character you like best. You can change it anytime.",
+    "titleSelf": "Your avatar",
+    "titleOther": "{name}'s avatar",
+    "option": "Avatar {number}",
+    "changeSelf": "Change my avatar",
+    "changeOther": "Change {name}'s avatar",
+    "reset": "Remove avatar"
   },
   "push": {
     "enable": "Turn on notifications",

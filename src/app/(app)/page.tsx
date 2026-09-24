@@ -12,6 +12,7 @@ import { FoodImage } from "@/components/food-image";
 import { ExpiryBadge } from "@/components/inventory/expiry-badge";
 import { InviteCard } from "@/components/family/invite-card";
 import { PushCard } from "@/components/family/push-card";
+import { MemberAvatar } from "@/components/family/member-avatar";
 import { HomeMeals } from "@/components/meals/home-meals";
 import { itemName, localName, type InventoryItem, type Meal } from "@/lib/types";
 
@@ -44,9 +45,14 @@ export default async function HomePage() {
 
   return (
     <>
-      <header className="pt-4 pb-1">
-        <p className="text-sm text-muted-foreground">{family.name}</p>
-        <h1 className="text-2xl font-bold tracking-tight">{t("hello", { name: firstName })} 👋</h1>
+      <header className="flex items-center gap-3 pt-4 pb-1">
+        <Link href="/family" aria-label={t("profile")} className="shrink-0 rounded-full">
+          <MemberAvatar member={profile} className="size-12" />
+        </Link>
+        <div className="min-w-0">
+          <p className="truncate text-sm text-muted-foreground">{family.name}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t("hello", { name: firstName })} 👋</h1>
+        </div>
       </header>
 
       <PushCard compact />

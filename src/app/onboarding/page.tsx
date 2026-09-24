@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/native-select";
 import { TimezoneInput } from "@/components/timezone-input";
+import { AvatarField } from "@/components/family/avatar-grid";
+import { isAvatarId } from "@/lib/avatars";
 
 export default async function OnboardingPage() {
   const session = await getSession();
@@ -14,6 +16,7 @@ export default async function OnboardingPage() {
   if (session.family) redirect("/");
 
   const t = await getTranslations("onboarding");
+  const ta = await getTranslations("avatar");
   const locale = await getLocale();
 
   return (
@@ -38,6 +41,11 @@ export default async function OnboardingPage() {
             ))}
           </NativeSelect>
         </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">{ta("choose")}</legend>
+          <p className="text-sm text-muted-foreground">{ta("subtitle")}</p>
+          <AvatarField name="avatar" defaultValue={isAvatarId(session.profile.avatar) ? session.profile.avatar : null} />
+        </fieldset>
         <div className="space-y-2">
           <Label htmlFor="locale">{t("language")}</Label>
           <NativeSelect id="locale" name="locale" defaultValue={locale}>

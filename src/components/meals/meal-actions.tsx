@@ -8,6 +8,7 @@ import { BookOpen, Check, Pencil, Trash2, X } from "lucide-react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ScopeDialog } from "@/components/meals/scope-dialog";
+import { MealItemsDrawer, MealItemsSummary } from "@/components/meals/meal-items";
 import { completeMeal, deleteMeal, reviewProposal, type Scope } from "@/app/actions/meals";
 import { mealName, type Meal } from "@/lib/types";
 
@@ -20,14 +21,42 @@ export function MealActionsDrawer({
   onClose: () => void;
   onEdit: (meal: Meal) => void;
 }) {
+  // El editor de ingredientes se abre al cerrar este drawer (igual que "Editar").
+  const [itemsMeal, setItemsMeal] = useState<Meal | null>(null);
   return (
-    <Drawer open={!!meal} onOpenChange={(o) => !o && onClose()}>
-      <DrawerContent>{meal && <MealActions meal={meal} today={today} isParent={isParent} onClose={onClose} onEdit={onEdit} />}</DrawerContent>
-    </Drawer>
+    <>
+      <Drawer open={!!meal} onOpenChange={(o) => !o && onClose()}>
+        <DrawerContent>
+          {meal && (
+            <MealActions
+              meal={meal}
+              today={today}
+              isParent={isParent}
+              onClose={onClose}
+              onEdit={onEdit}
+              onEditItems={(m) => {
+                onClose();
+                setItemsMeal(m);
+              }}
+            />
+          )}
+        </DrawerContent>
+      </Drawer>
+      <MealItemsDrawer meal={itemsMeal} onClose={() => setItemsMeal(null)} />
+    </>
   );
 }
 
-function MealActions({ meal, today, isParent, onClose, onEdit }: { meal: Meal; today: string; isParent: boolean; onClose: () => void; onEdit: (m: Meal) => void }) {
+function MealActions({
+  meal, today, isParent, onClose, onEdit, onEditItems,
+}: {
+  meal: Meal;
+  today: string;
+  isParent: boolean;
+  onClose: () => void;
+  onEdit: (m: Meal) => void;
+  onEditItems: (m: Meal) => void;
+}) {
   const t = useTranslations("calendar");
   const ts = useTranslations("slots");
   const tr = useTranslations("recurrence");
@@ -53,6 +82,7 @@ function MealActions({ meal, today, isParent, onClose, onEdit }: { meal: Meal; t
         const report = await completeMeal(meal.id, locale);
         const lines = [
           report.used.length ? t("usedIngredients", { list: report.used.map((u) => `${u.name} (${u.amount})`).join(", ") }) : null,
+          report.short.length ? t("shortIngredients", { list: report.short.join(", ") }) : null,
           report.missing.length ? t("missingIngredients", { list: report.missing.join(", ") }) : null,
         ].filter(Boolean);
         toast.success(t("completedToast"), { description: lines.join("\n"), duration: 6000 });
@@ -82,7 +112,15 @@ function MealActions({ meal, today, isParent, onClose, onEdit }: { meal: Meal; t
         )}
       </DrawerHeader>
 
-      <div className="flex flex-col gap-2 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <div className="flex min-h-0 flex-col gap-2 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        {meal.status !== "cancelled" && (
+          <MealItemsSummary
+            meal={meal}
+            canEdit={isParent && (meal.status === "planned" || meal.status === "proposed")}
+            onEdit={() => onEditItems(meal)}
+          />
+        )}
+
         {meal.recipe && (
           <Link href={`/recipes/${meal.recipe.slug}`} className={buttonVariants({ variant: "outline", size: "lg", className: "h-11" })}>
             <BookOpen /> {t("viewRecipe")}

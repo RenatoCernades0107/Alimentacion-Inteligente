@@ -7,7 +7,8 @@ import { materializeSeries } from "@/lib/calendar";
 import { addDays, isValidDate, todayIn } from "@/lib/dates";
 import { ALL_SLOTS, MATERIALIZE_DAYS, RECURRENCES } from "@/lib/meals";
 import { notifyFamily } from "@/lib/push";
-import { convert, formatQuantity } from "@/lib/units";
+import { loadMealItems } from "@/lib/meal-items";
+import { convert, formatQuantity, UNITS } from "@/lib/units";
 import type { InventoryItem, MealSlot, Recurrence, Unit } from "@/lib/types";
 import es from "../../../messages/es.json";
 import en from "../../../messages/en.json";
@@ -81,13 +82,21 @@ export async function updateMeal(id: string, input: MealInput, scope: Scope) {
     const from = series.start_date > today ? series.start_date : today;
     await supabase.from("meals").delete()
       .eq("series_id", series.id).gte("date", from).eq("status", "planned").eq("is_exception", false);
+    // Si cambia la receta, los ingredientes editados de la recurrencia ya no aplican.
+    const recipeChanged = recipe_id !== series.recipe_id;
+    if (recipeChanged) await supabase.from("meal_items").delete().eq("series_id", series.id);
     await supabase.from("meal_series").update({
       recipe_id, title, slot: input.slot, recurrence, materialized_until: addDays(from, -1),
+      ...(recipeChanged ? { custom_items: false } : {}),
     }).eq("id", series.id);
     await materializeSeries(family.id, addDays(today, MATERIALIZE_DAYS));
   } else {
+    // Si cambia la receta, los ingredientes editados de esta comida ya no aplican.
+    const recipeChanged = recipe_id !== meal.recipe_id && meal.custom_items;
+    if (recipeChanged) await supabase.from("meal_items").delete().eq("meal_id", id);
     const { error } = await supabase.from("meals").update({
       date: input.date, slot: input.slot, recipe_id, title, is_exception: !!meal.series_id,
+      ...(recipeChanged ? { custom_items: false } : {}),
     }).eq("id", id);
     if (error) throw new Error(error.message);
   }
@@ -123,23 +132,85 @@ export async function reviewProposal(id: string, accept: boolean) {
   revalidatePath("/", "layout");
 }
 
-export type CompletionReport = { used: { name: string; amount: string }[]; missing: string[] };
+export type MealItemInput = { food_id: string; quantity: number | null; unit: Unit | null; optional?: boolean };
 
-/** Marca la comida como completada y descuenta los ingredientes del inventario. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Cambia los ingredientes de una comida (quitar, cambiar porción, agregar alimentos)
+ * o de toda su recurrencia. `items = null` vuelve a los ingredientes por defecto.
+ */
+export async function setMealItems(id: string, items: MealItemInput[] | null, scope: Scope) {
+  const { supabase, family } = await requireParent();
+  const { data: meal } = await supabase.from("meals").select("*").eq("id", id).single();
+  if (!meal || meal.status === "completed" || meal.status === "cancelled") throw new Error("invalid");
+
+  // Limpia la lista: sin duplicados, cantidades positivas y unidades válidas.
+  let rows: { food_id: string; quantity: number | null; unit: Unit | null; optional: boolean; position: number }[] | null = null;
+  if (items) {
+    const byFood = new Map<string, MealItemInput>();
+    for (const it of items.slice(0, 80)) if (typeof it?.food_id === "string" && UUID.test(it.food_id)) byFood.set(it.food_id, it);
+    // Solo alimentos que la familia puede ver (catálogo global o propios).
+    const { data: foods } = byFood.size
+      ? await supabase.from("foods").select("id").in("id", [...byFood.keys()])
+      : { data: [] as { id: string }[] };
+    const visible = new Set(((foods ?? []) as { id: string }[]).map((f) => f.id));
+    rows = [...byFood.values()].filter((it) => visible.has(it.food_id)).map((it, position) => {
+      const q = Number(it.quantity);
+      const quantity = it.quantity !== null && Number.isFinite(q) && q > 0 ? +q.toFixed(3) : null;
+      const unit: Unit | null = quantity === null ? null : it.unit && UNITS.includes(it.unit) ? it.unit : "unit";
+      return { food_id: it.food_id, quantity, unit, optional: !!it.optional, position };
+    });
+  }
+
+  const { data: series } = scope === "series" && meal.series_id
+    ? await supabase.from("meal_series").select("id, recipe_id").eq("id", meal.series_id).single()
+    : { data: null };
+
+  // Si esta comida ya tiene otra receta que la recurrencia, el cambio aplica solo a ella.
+  if (series && series.recipe_id === meal.recipe_id) {
+    await supabase.from("meal_items").delete().eq("series_id", series.id);
+    if (rows?.length) {
+      const { error } = await supabase.from("meal_items").insert(rows.map((r) => ({ ...r, family_id: family.id, series_id: series.id })));
+      if (error) throw new Error(error.message);
+    }
+    const { error } = await supabase.from("meal_series").update({ custom_items: rows !== null }).eq("id", series.id);
+    if (error) throw new Error(error.message);
+    // Esta comida pasa a seguir a la recurrencia.
+    if (meal.custom_items) {
+      await supabase.from("meal_items").delete().eq("meal_id", id);
+      await supabase.from("meals").update({ custom_items: false }).eq("id", id);
+    }
+  } else {
+    await supabase.from("meal_items").delete().eq("meal_id", id);
+    if (rows?.length) {
+      const { error } = await supabase.from("meal_items").insert(rows.map((r) => ({ ...r, family_id: family.id, meal_id: id })));
+      if (error) throw new Error(error.message);
+    }
+    // En una serie se marca como excepción para que no se regenere y pierda los cambios.
+    const { error } = await supabase.from("meals").update({
+      custom_items: rows !== null,
+      is_exception: meal.is_exception || (!!meal.series_id && rows !== null),
+    }).eq("id", id);
+    if (error) throw new Error(error.message);
+  }
+  revalidatePath("/", "layout");
+}
+
+export type CompletionReport = { used: { name: string; amount: string }[]; missing: string[]; short: string[] };
+
+/**
+ * Marca la comida como completada y descuenta del inventario sus ingredientes
+ * (los editados, si los hay). Nunca falla ni deja stock negativo por falta de
+ * inventario: se descuenta solo lo que hay y lo que falta se informa.
+ */
 export async function completeMeal(id: string, locale: string): Promise<CompletionReport> {
   const { supabase, user } = await requireParent();
-  const { data: meal } = await supabase
-    .from("meals")
-    .select("*, recipe:recipes(recipe_ingredients(food_id, quantity, unit, optional, food:foods(name_es, name_en)))")
-    .eq("id", id)
-    .single();
-  if (!meal || meal.status === "completed") throw new Error("invalid");
+  const { data: meal } = await supabase.from("meals").select("*").eq("id", id).single();
+  if (!meal || meal.status === "completed" || meal.status === "cancelled") throw new Error("invalid");
 
-  const report: CompletionReport = { used: [], missing: [] };
-  const ingredients = (meal.recipe?.recipe_ingredients ?? []) as {
-    food_id: string; quantity: number | null; unit: Unit | null; optional: boolean;
-    food: { name_es: string; name_en: string };
-  }[];
+  const report: CompletionReport = { used: [], missing: [], short: [] };
+  const { source, items: ingredients } = await loadMealItems(supabase, id);
 
   if (ingredients.length) {
     const { data: items } = await supabase
@@ -156,27 +227,45 @@ export async function completeMeal(id: string, locale: string): Promise<Completi
         if (!ing.optional) report.missing.push(name);
         continue;
       }
+      // Sin cantidad ("al gusto"): no se descuenta nada.
       if (!ing.quantity || !ing.unit) continue;
 
-      // Descuenta primero de lo que vence antes.
+      // Descuenta primero de lo que vence antes, sin pasar de lo que hay.
       let remaining = ing.quantity;
       for (const item of stock) {
-        if (remaining <= 0) break;
+        if (remaining <= 1e-9) break;
         const needed = convert(remaining, ing.unit, item.unit);
         if (needed === null) continue;
         const take = Math.min(item.quantity, needed);
-        item.quantity = +(item.quantity - take).toFixed(3);
+        if (take <= 0) continue;
+        item.quantity = Math.max(0, +(item.quantity - take).toFixed(3));
         remaining -= convert(take, item.unit, ing.unit) ?? 0;
         if (item.quantity <= 0) await supabase.from("inventory_items").delete().eq("id", item.id);
         else await supabase.from("inventory_items").update({ quantity: item.quantity, updated_at: new Date().toISOString() }).eq("id", item.id);
       }
-      const used = ing.quantity - Math.max(0, remaining);
-      if (used > 0) report.used.push({ name, amount: `${formatQuantity(+used.toFixed(2))} ${ing.unit}` });
+      remaining = Math.max(0, remaining);
+      const used = ing.quantity - remaining;
+      if (used > 1e-9) report.used.push({ name, amount: `${formatQuantity(+used.toFixed(2))} ${ing.unit}` });
+      // No alcanzó (o estaba en una unidad no convertible).
+      if (remaining > 1e-6 && !ing.optional) (used > 1e-9 ? report.short : report.missing).push(name);
+    }
+  }
+
+  // Se guarda qué ingredientes llevaba la comida al completarse, para que el historial
+  // no cambie si luego se edita la receta o la recurrencia.
+  if (source === "recipe" || source === "series") {
+    await supabase.from("meal_items").delete().eq("meal_id", id);
+    if (ingredients.length) {
+      await supabase.from("meal_items").insert(ingredients.map((ing, position) => ({
+        family_id: meal.family_id, meal_id: id, food_id: ing.food_id,
+        quantity: ing.quantity, unit: ing.unit, optional: ing.optional, position,
+      })));
     }
   }
 
   const { error } = await supabase.from("meals").update({
     status: "completed", completed_by: user.id, completed_at: new Date().toISOString(), is_exception: !!meal.series_id,
+    custom_items: meal.custom_items || source === "recipe" || source === "series",
   }).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/", "layout");

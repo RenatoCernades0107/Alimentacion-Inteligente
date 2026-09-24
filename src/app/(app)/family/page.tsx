@@ -14,7 +14,7 @@ export default async function FamilyPage() {
 
   const { data: members } = await supabase
     .from("profiles")
-    .select("id, full_name, avatar_url, role, locale, family_id")
+    .select("id, full_name, avatar_url, avatar, role, locale, family_id")
     .eq("family_id", family.id)
     .order("created_at");
 
@@ -23,7 +23,7 @@ export default async function FamilyPage() {
       <PageHeader title={family.name} />
 
       <Section title={t("members")}>
-        <MemberList members={(members ?? []) as Profile[]} currentUserId={profile.id} canRemove={isParent} />
+        <MemberList members={(members ?? []) as Profile[]} currentUserId={profile.id} isParent={isParent} />
       </Section>
 
       {isParent && (

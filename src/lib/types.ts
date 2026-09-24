@@ -16,6 +16,8 @@ export type Profile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
+  /** Id de avatar predefinido (public/avatars). */
+  avatar: string | null;
   locale: "es" | "en";
   family_id: string | null;
   role: Role | null;
