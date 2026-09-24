@@ -129,7 +129,7 @@
     "placeholder": "Search: milk, chicken, rice…",
     "generic": "Generic",
     "genericSection": "Generic foods",
-    "productsSection": "Brand products",
+    "productsSection": "Other products in Peru",
     "customSection": "Your foods",
     "noResults": "We couldn't find \"{query}\".",
     "createCustom": "Create \"{query}\"",
@@ -137,12 +137,15 @@
     "scanning": "Point the camera at the barcode",
     "scanNotFound": "Product {code} not found. Search by name or create it.",
     "cameraError": "Couldn't access the camera.",
-    "whatIsIt": "What food is it?",
-    "whatIsItHint": "We use it to suggest recipes.",
-    "none": "None",
     "searchingProducts": "Searching products…",
     "storesSection": "In supermarkets",
-    "soldAt": "Sold at"
+    "soldAt": "Sold at",
+    "recognizing": "Recognizing the product…",
+    "countsAs": "Counts as",
+    "change": "Change",
+    "changeTitle": "Which food is it?",
+    "notRecognized": "We didn't recognize this product. What is it like?",
+    "linkHint": "We use it for recipes, suggestions and meals."
   },
   "custom": {
     "title": "Create food",

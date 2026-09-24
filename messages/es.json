@@ -129,7 +129,7 @@
     "placeholder": "Busca: leche, pollo, arroz…",
     "generic": "Genérico",
     "genericSection": "Alimentos genéricos",
-    "productsSection": "Productos de marca",
+    "productsSection": "Otros productos en Perú",
     "customSection": "Tus alimentos",
     "noResults": "No encontramos \"{query}\".",
     "createCustom": "Crear \"{query}\"",
@@ -137,12 +137,15 @@
     "scanning": "Apunta la cámara al código de barras",
     "scanNotFound": "No encontramos el producto {code}. Búscalo por nombre o créalo.",
     "cameraError": "No se pudo acceder a la cámara.",
-    "whatIsIt": "¿Qué alimento es?",
-    "whatIsItHint": "Lo usamos para sugerirte recetas.",
-    "none": "Ninguno",
     "searchingProducts": "Buscando productos…",
     "storesSection": "En supermercados",
-    "soldAt": "Se vende en"
+    "soldAt": "Se vende en",
+    "recognizing": "Reconociendo el producto…",
+    "countsAs": "Se cuenta como",
+    "change": "Cambiar",
+    "changeTitle": "¿A qué alimento corresponde?",
+    "notRecognized": "No reconocimos este producto, ¿a qué se parece?",
+    "linkHint": "Así lo usamos en recetas, sugerencias y comidas."
   },
   "custom": {
     "title": "Crear alimento",

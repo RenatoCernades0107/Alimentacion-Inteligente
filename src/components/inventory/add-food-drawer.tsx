@@ -121,8 +121,10 @@ function SearchStep({
   const storeProducts = storeResults.q === debounced ? storeResults.products : [];
   // Los de Open Food Facts que ya salen como producto de supermercado no se repiten.
   const storeCodes = new Set(storeProducts.map((p) => p.code).filter(Boolean));
-  const products = productResults.q === debounced ? productResults.products.filter((p) => !storeCodes.has(p.code)) : [];
-  const loadingProducts = debounced.length >= 3 && productResults.q !== debounced;
+  // Open Food Facts solo completa cuando los supermercados traen pocos resultados.
+  const showOff = storeResults.q === debounced && storeProducts.length < 5;
+  const products = showOff && productResults.q === debounced ? productResults.products.filter((p) => !storeCodes.has(p.code)) : [];
+  const loadingProducts = showOff && debounced.length >= 3 && productResults.q !== debounced;
   const custom = foods.filter((f) => f.family_id);
   const generic = foods.filter((f) => !f.family_id);
 
@@ -339,33 +341,18 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
   const [unit, setUnit] = useState<Unit>(initial.unit);
   const [expires, setExpires] = useState("");
 
-  // Para productos de marca: a qué alimento genérico corresponde (para sugerir recetas).
-  const [guesses, setGuesses] = useState<Food[]>([]);
-  const [foodId, setFoodId] = useState<string>("");
+  // Para productos de marca: a qué alimento genérico corresponde (recetas, sugerencias, stock).
+  const [linked, setLinked] = useState<Food | null>(null);
+  const [guessing, setGuessing] = useState(isProduct);
+  const [picking, setPicking] = useState(false);
   const guessed = useRef(false);
   useEffect(() => {
     if (selection.kind !== "product" || guessed.current) return;
     guessed.current = true;
-    const words = selection.product.name.split(/\s+/).filter((w) => w.length > 2);
-    const queries = [selection.product.name, ...words].slice(0, 4);
-    const knownId = selection.product.foodId;
-    (async () => {
-      const supabase = createClient();
-      const seen = new Map<string, Food>();
-      // Los productos de supermercado ya vienen asociados a su alimento genérico.
-      if (knownId) {
-        const { data } = await supabase.from("foods").select("*").eq("id", knownId).single();
-        if (data) seen.set(data.id, data as Food);
-      }
-      for (const q of queries) {
-        const { data } = await supabase.rpc("search_foods", { p_query: q, p_limit: 4 });
-        for (const f of (data as Food[]) ?? []) if (!seen.has(f.id)) seen.set(f.id, f);
-        if (seen.size >= 5) break;
-      }
-      const list = [...seen.values()].slice(0, 6);
-      setGuesses(list);
-      if (list[0]) setFoodId(list[0].id);
-    })();
+    guessGenericFood(selection.product).then((food) => {
+      setLinked(food);
+      setGuessing(false);
+    });
   }, [selection]);
 
   const name = selection.kind === "food" ? localName(selection.food, locale) : selection.product.name;
@@ -380,7 +367,7 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
           selection.kind === "food"
             ? { food_id: selection.food.id, quantity: Number(quantity), unit, expires_on: expires || null }
             : {
-                food_id: foodId || null,
+                food_id: linked?.id ?? null,
                 barcode: selection.product.code,
                 product_name: selection.product.name,
                 brand: selection.product.brand,
@@ -433,17 +420,113 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
       </div>
 
       {isProduct && (
-        <div className="space-y-2">
-          <Label htmlFor="food">{ts("whatIsIt")}</Label>
-          <NativeSelect id="food" value={foodId} onChange={(e) => setFoodId(e.target.value)}>
-            <option value="">{ts("none")}</option>
-            {guesses.map((f) => <option key={f.id} value={f.id}>{f.emoji} {localName(f, locale)}</option>)}
-          </NativeSelect>
-          <p className="text-xs text-muted-foreground">{ts("whatIsItHint")}</p>
-        </div>
+        <GenericFoodLink
+          food={linked}
+          guessing={guessing}
+          picking={picking || (!guessing && !linked)}
+          onChange={() => setPicking(true)}
+          onPick={(f) => {
+            setLinked(f);
+            setPicking(false);
+          }}
+        />
       )}
 
       <Button type="submit" size="lg" className="h-11 w-full text-base" disabled={pending}>{tc("add")}</Button>
     </form>
+  );
+}
+
+const STOPWORDS = new Set([
+  "de", "del", "la", "el", "los", "las", "en", "con", "sin", "y", "x", "al", "para",
+  "caja", "bolsa", "lata", "botella", "paquete", "pack", "doypack", "sachet", "frasco", "tarro", "un", "und", "unid",
+  "uht", "light", "entera", "entero", "natural", "premium", "clasica", "clasico", "original", "tradicional",
+  "lactosa", "deslactosada", "descremada", "semidescremada", "fortificada", "familiar", "grande", "mediano",
+]);
+
+/** Adivina el alimento genérico de un producto de marca ("Leche GLORIA Sin Lactosa 1L" → Leche). */
+async function guessGenericFood(product: OffProduct): Promise<Food | null> {
+  const supabase = createClient();
+  // Los productos de supermercado ya vienen asociados a su alimento genérico.
+  if (product.foodId) {
+    const { data } = await supabase.from("foods").select("*").eq("id", product.foodId).single();
+    if (data) return data as Food;
+  }
+  const brand = new Set((product.brand ?? "").toLowerCase().split(/[\s,]+/));
+  const words = product.name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .split(/[^a-z0-9ñ]+/)
+    .filter((w) => w.length > 2 && !/\d/.test(w) && !STOPWORDS.has(w) && !brand.has(w));
+  // Primero el nombre limpio completo, luego las primeras palabras ("leche", …).
+  const queries = [words.join(" "), ...words.slice(0, 3)].filter(Boolean);
+  for (const q of queries) {
+    const { data } = await supabase.rpc("search_foods", { p_query: q, p_limit: 1 });
+    const food = (data as Food[] | null)?.[0];
+    if (food) return food;
+  }
+  return null;
+}
+
+/** "Se cuenta como 🥛 Leche · Cambiar"; si no se reconoce, un buscador de alimentos genéricos. */
+function GenericFoodLink({
+  food, guessing, picking, onChange, onPick,
+}: {
+  food: Food | null;
+  guessing: boolean;
+  picking: boolean;
+  onChange: () => void;
+  onPick: (f: Food) => void;
+}) {
+  const t = useTranslations("search");
+  const locale = useLocale();
+  const [query, setQuery] = useState("");
+  const debounced = useDebounced(query.trim(), 250);
+  const [results, setResults] = useState<{ q: string; foods: Food[] }>({ q: "", foods: [] });
+
+  useEffect(() => {
+    if (!debounced) return;
+    let cancelled = false;
+    createClient()
+      .rpc("search_foods", { p_query: debounced, p_limit: 6 })
+      .then(({ data }) => !cancelled && setResults({ q: debounced, foods: (data as Food[]) ?? [] }));
+    return () => {
+      cancelled = true;
+    };
+  }, [debounced]);
+
+  if (guessing) return <p className="text-sm text-muted-foreground">{t("recognizing")}</p>;
+
+  if (!picking && food) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl bg-muted/60 p-2.5">
+        <FoodImage src={food.image_url} emoji={food.emoji} alt={localName(food, locale)} className="size-10" />
+        <div className="min-w-0 flex-1 text-sm">
+          <div className="text-muted-foreground">{t("countsAs")}</div>
+          <div className="truncate font-medium">{localName(food, locale)}</div>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onChange}>{t("change")}</Button>
+      </div>
+    );
+  }
+
+  const foods = results.q === debounced ? results.foods : [];
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="generic-food">{food ? t("changeTitle") : t("notRecognized")}</Label>
+      <div className="relative">
+        <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input id="generic-food" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("placeholder")} className="h-10 pl-9" />
+      </div>
+      {foods.length > 0 && (
+        <div className="space-y-0.5">
+          {foods.map((f) => (
+            <ResultRow key={f.id} image={f.image_url} emoji={f.emoji} title={localName(f, locale)} onClick={() => onPick(f)} />
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">{t("linkHint")}</p>
+    </div>
   );
 }

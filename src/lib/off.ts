@@ -21,8 +21,9 @@ export const OFF_USER_AGENT = "AlimentacionInteligente/0.1 (prototype)";
 
 const FIELDS = "code,product_name,product_name_es,product_name_en,generic_name,brands,image_small_url,image_front_small_url,image_front_url,quantity,categories_tags";
 
+// Solo productos que se venden en Perú.
 export const OFF_SEARCH_URL = (q: string, lang: string) =>
-  `https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=15&langs=${lang}&fields=${FIELDS}`;
+  `https://search.openfoodfacts.org/search?q=${encodeURIComponent(`${q} countries_tags:"en:peru"`)}&page_size=15&langs=${lang}&fields=${FIELDS}`;
 
 export const OFF_PRODUCT_URL = (code: string) =>
   `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${FIELDS}`;
