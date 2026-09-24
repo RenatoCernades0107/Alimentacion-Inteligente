@@ -8,7 +8,6 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { FoodImage } from "@/components/food-image";
 import { NativeSelect } from "@/components/native-select";
 import { BarcodeScanner } from "@/components/barcode-scanner";
@@ -125,8 +124,8 @@ function SearchStep({
   const showOff = storeResults.q === debounced && storeProducts.length < 5;
   const products = showOff && productResults.q === debounced ? productResults.products.filter((p) => !storeCodes.has(p.code)) : [];
   const loadingProducts = showOff && debounced.length >= 3 && productResults.q !== debounced;
+  // Los genéricos no se listan: solo los alimentos que creó la familia.
   const custom = foods.filter((f) => f.family_id);
-  const generic = foods.filter((f) => !f.family_id);
 
   return (
     <div className="space-y-4">
@@ -156,26 +155,6 @@ function SearchStep({
               ))}
             </ResultGroup>
           )}
-
-          <ResultGroup title={t("genericSection")}>
-            {generic.map((f) => (
-              <ResultRow
-                key={f.id}
-                image={f.image_url}
-                emoji={f.emoji}
-                title={localName(f, locale)}
-                badge={t("generic")}
-                onClick={() => onSelect({ kind: "food", food: f })}
-              />
-            ))}
-            {/* Siempre hay una opción genérica: si no existe en el catálogo, se crea. */}
-            <button onClick={onCreate} className="flex w-full items-center gap-3 rounded-xl p-2 text-left active:bg-muted">
-              <div className="flex size-12 items-center justify-center rounded-xl border border-dashed">
-                <Plus className="size-5 text-muted-foreground" />
-              </div>
-              <span className="font-medium">{t("createCustom", { query })}</span>
-            </button>
-          </ResultGroup>
 
           {storeProducts.length > 0 && (
             <ResultGroup title={t("storesSection")}>
@@ -208,6 +187,14 @@ function SearchStep({
               ))}
             </ResultGroup>
           )}
+
+          {/* Si no está en ningún catálogo, se crea. */}
+          <button onClick={onCreate} className="flex w-full items-center gap-3 rounded-xl p-2 text-left active:bg-muted">
+            <div className="flex size-12 items-center justify-center rounded-xl border border-dashed">
+              <Plus className="size-5 text-muted-foreground" />
+            </div>
+            <span className="font-medium">{t("createCustom", { query })}</span>
+          </button>
         </>
       )}
     </div>
@@ -224,13 +211,12 @@ function ResultGroup({ title, children }: { title: string; children: React.React
 }
 
 function ResultRow({
-  image, emoji, title, subtitle, badge, stores, onClick,
+  image, emoji, title, subtitle, stores, onClick,
 }: {
   image: string | null;
   emoji: string | null;
   title: string;
   subtitle?: string;
-  badge?: string;
   stores?: StoreId[];
   onClick: () => void;
 }) {
@@ -242,7 +228,6 @@ function ResultRow({
         {subtitle && <div className="truncate text-sm text-muted-foreground">{subtitle}</div>}
         {stores && stores.length > 0 && <StoreBadges stores={stores} className="mt-1" />}
       </div>
-      {badge && <Badge variant="secondary">{badge}</Badge>}
     </button>
   );
 }

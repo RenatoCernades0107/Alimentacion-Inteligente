@@ -127,8 +127,6 @@
   },
   "search": {
     "placeholder": "Search: milk, chicken, rice…",
-    "generic": "Generic",
-    "genericSection": "Generic foods",
     "productsSection": "Other products in Peru",
     "customSection": "Your foods",
     "noResults": "We couldn't find \"{query}\".",
