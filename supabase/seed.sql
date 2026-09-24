@@ -474,7 +474,7 @@ join foods f on f.key = v.key
 join recipes r on r.slug = 'tacu-tacu';
 
 insert into recipes (slug, country, name_es, name_en, description_es, description_en, emoji, image_url, meal_types, servings, time_minutes, source_url, steps_es, steps_en) values (
-  'sopa-criolla', 'PE', 'Sopa criolla', 'Sopa criolla', 'Sopa de carne molida con fideos, leche y huevo.', 'Ground beef soup with noodles, milk and egg.', '🍜', null, array['dinner']::text[], 4, 30, 'https://www.hora.es/platos-peruanos-caseros/#12-sopa-criolla',
+  'sopa-criolla', 'PE', 'Sopa criolla', 'Sopa criolla', 'Sopa de carne molida con fideos, leche y huevo.', 'Ground beef soup with noodles, milk and egg.', '🍜', '/recipes/sopa-criolla.jpg', array['dinner']::text[], 4, 30, 'https://www.hora.es/platos-peruanos-caseros/#12-sopa-criolla',
   array['Dora la carne con cebolla, ajo, tomate y ají panca.', 'Agrega 1,5 L de agua y hierve.', 'Añade los fideos y cocina 8 minutos.', 'Termina con la leche, orégano y un huevo por plato.']::text[], array['Brown the beef with onion, garlic, tomato and aji panca.', 'Add 1.5 L of water and bring to a boil.', 'Add the noodles and cook 8 minutes.', 'Finish with milk, oregano and an egg per bowl.']::text[])
 on conflict (slug) do update set country = excluded.country, name_es = excluded.name_es, name_en = excluded.name_en,
   description_es = excluded.description_es, description_en = excluded.description_en, emoji = excluded.emoji, image_url = excluded.image_url,
@@ -572,7 +572,7 @@ join foods f on f.key = v.key
 join recipes r on r.slug = 'menestron';
 
 insert into recipes (slug, country, name_es, name_en, description_es, description_en, emoji, image_url, meal_types, servings, time_minutes, source_url, steps_es, steps_en) values (
-  'pollo-saltado', 'PE', 'Pollo saltado', 'Pollo saltado', 'Salteado de pollo con cebolla, tomate y papas fritas.', 'Stir-fried chicken with onion, tomato and fries.', '🍗', null, array['lunch', 'dinner']::text[], 4, 30, 'https://www.hora.es/platos-peruanos-caseros/#58-pollo-saltado',
+  'pollo-saltado', 'PE', 'Pollo saltado', 'Pollo saltado', 'Salteado de pollo con cebolla, tomate y papas fritas.', 'Stir-fried chicken with onion, tomato and fries.', '🍗', '/recipes/pollo-saltado.jpg', array['lunch', 'dinner']::text[], 4, 30, 'https://www.hora.es/platos-peruanos-caseros/#58-pollo-saltado',
   array['Corta el pollo en tiras y sazónalo.', 'Saltea a fuego alto con ajo; agrega cebolla, tomate y ají.', 'Añade sillao y vinagre; mezcla con papas fritas y culantro.', 'Sirve con arroz.']::text[], array['Cut the chicken into strips and season.', 'Stir-fry over high heat with garlic; add onion, tomato and chili.', 'Add soy sauce and vinegar; toss with fries and cilantro.', 'Serve with rice.']::text[])
 on conflict (slug) do update set country = excluded.country, name_es = excluded.name_es, name_en = excluded.name_en,
   description_es = excluded.description_es, description_en = excluded.description_en, emoji = excluded.emoji, image_url = excluded.image_url,
