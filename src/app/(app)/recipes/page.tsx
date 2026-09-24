@@ -6,6 +6,7 @@ import { todayIn } from "@/lib/dates";
 import { suggest, type SuggestionMode } from "@/lib/suggestions";
 import { loadRecipesAndInventory, parseCountries } from "@/lib/recipes";
 import { PageHeader } from "@/components/page-header";
+import { RecipeImage } from "@/components/recipe-image";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { localName, type Country } from "@/lib/types";
@@ -70,9 +71,7 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
           {results.map(({ recipe, have, total, missing, expiringUsed }) => (
             <li key={recipe.id}>
               <Link href={`/recipes/${recipe.slug}`} className="flex gap-3 rounded-2xl border bg-card p-3 active:bg-muted">
-                <div className="flex size-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-50 to-orange-100 text-4xl">
-                  {recipe.emoji}
-                </div>
+                <RecipeImage src={recipe.image_url} emoji={recipe.emoji} className="size-16 text-4xl" />
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold leading-tight">{localName(recipe, locale)}</span>

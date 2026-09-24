@@ -8,9 +8,11 @@ import { slotsFor } from "@/lib/meals";
 import { RECIPE_SELECT } from "@/lib/recipes";
 import { formatQuantity } from "@/lib/units";
 import { FoodImage } from "@/components/food-image";
+import { RecipeImage } from "@/components/recipe-image";
 import { AddRecipeToCalendar } from "@/components/meals/add-recipe-to-calendar";
 import { localName, type Recipe } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import photoCredits from "../../../../../public/recipes/CREDITS.json";
 
 export default async function RecipePage({ params }: PageProps<"/recipes/[slug]">) {
   const { slug } = await params;
@@ -33,6 +35,8 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
   const slots = slotsFor(family.meals_per_day);
   const defaultSlot = slots.find((s) => recipe.meal_types.includes(s)) ?? (recipe.meal_types.includes("snack") ? slots.find((s) => s.includes("snack")) : undefined) ?? slots[0];
 
+  const credit = (photoCredits as Record<string, { page: string; author: string; license: string }>)[recipe.slug];
+
   return (
     <article className="pb-6">
       <div className="pt-3">
@@ -42,7 +46,12 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
       </div>
 
       <div className="flex flex-col items-center gap-2 py-4 text-center">
-        <div className="flex size-24 items-center justify-center rounded-3xl bg-gradient-to-br from-amber-50 to-orange-100 text-6xl">{recipe.emoji}</div>
+        <RecipeImage src={recipe.image_url} emoji={recipe.emoji} alt={localName(recipe, locale)} className="aspect-[4/3] h-auto w-full max-w-sm rounded-3xl text-6xl" />
+        {credit && (
+          <a href={credit.page} target="_blank" rel="noreferrer" className="-mt-1 max-w-sm truncate text-xs text-muted-foreground">
+            {t("photoCredit", { author: credit.author, license: credit.license })}
+          </a>
+        )}
         <h1 className="text-2xl font-bold">{localName(recipe, locale)}</h1>
         <p className="text-muted-foreground">{locale === "en" ? recipe.description_en : recipe.description_es}</p>
         <div className="flex flex-wrap justify-center gap-3 text-sm text-muted-foreground">
@@ -58,7 +67,7 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
         slot={defaultSlot}
         slots={slots}
         isParent={isParent}
-        recipes={[{ id: recipe.id, slug: recipe.slug, name_es: recipe.name_es, name_en: recipe.name_en, emoji: recipe.emoji, meal_types: recipe.meal_types, country: recipe.country }]}
+        recipes={[{ id: recipe.id, slug: recipe.slug, name_es: recipe.name_es, name_en: recipe.name_en, emoji: recipe.emoji, image_url: recipe.image_url, meal_types: recipe.meal_types, country: recipe.country }]}
       />
 
       <h2 className="mt-6 mb-2 text-lg font-semibold">{t("ingredients")}</h2>

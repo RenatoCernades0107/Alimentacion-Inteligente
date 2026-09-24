@@ -9,6 +9,7 @@ import { suggest } from "@/lib/suggestions";
 import { loadRecipesAndInventory } from "@/lib/recipes";
 import { Section } from "@/components/page-header";
 import { FoodImage } from "@/components/food-image";
+import { RecipeImage } from "@/components/recipe-image";
 import { ExpiryBadge } from "@/components/inventory/expiry-badge";
 import { InviteCard } from "@/components/family/invite-card";
 import { PushCard } from "@/components/family/push-card";
@@ -24,7 +25,7 @@ export default async function HomePage() {
 
   await materializeSeries(family.id, addDays(today, 14));
 
-  const mealSelect = "*, recipe:recipes(id, slug, name_es, name_en, emoji), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)";
+  const mealSelect = "*, recipe:recipes(id, slug, name_es, name_en, emoji, image_url), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)";
   const [{ data: todayMeals }, { data: proposals }, { data: pending }, { data: expiring }, { recipes, inventory }] = await Promise.all([
     supabase.from("meals").select(mealSelect).eq("family_id", family.id).eq("date", today).neq("status", "cancelled"),
     isParent
@@ -73,7 +74,7 @@ export default async function HomePage() {
               {suggestions.map(({ recipe }) => (
                 <li key={recipe.id}>
                   <Link href={`/recipes/${recipe.slug}`} className="flex items-center gap-3 rounded-xl bg-muted/60 p-2">
-                    <span className="text-2xl">{recipe.emoji}</span>
+                    <RecipeImage src={recipe.image_url} emoji={recipe.emoji} />
                     <span className="flex-1 font-medium">{localName(recipe, locale)}</span>
                     <ChevronRight className="size-4 text-muted-foreground" />
                   </Link>

@@ -228,7 +228,8 @@
     "optional": "optional",
     "missing": "Missing",
     "addToCalendar": "Add to calendar",
-    "allMeals": "All"
+    "allMeals": "All",
+    "photoCredit": "Photo: {author} · {license}"
   },
   "family": {
     "title": "Family",

@@ -9,6 +9,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ScopeDialog } from "@/components/meals/scope-dialog";
 import { MealItemsDrawer, MealItemsSummary } from "@/components/meals/meal-items";
+import { RecipeImage } from "@/components/recipe-image";
 import { completeMeal, deleteMeal, reviewProposal, type Scope } from "@/app/actions/meals";
 import { mealName, type Meal } from "@/lib/types";
 
@@ -101,7 +102,7 @@ function MealActions({
   return (
     <>
       <DrawerHeader className="items-center text-center">
-        <div className="text-4xl">{meal.recipe?.emoji ?? "🍽️"}</div>
+        <RecipeImage src={meal.recipe?.image_url} emoji={meal.recipe?.emoji} className="size-20 rounded-2xl text-4xl" />
         <DrawerTitle className="text-lg">{mealName(meal, locale)}</DrawerTitle>
         <p className="text-sm text-muted-foreground">
           {ts(meal.slot)}
