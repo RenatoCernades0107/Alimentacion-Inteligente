@@ -127,8 +127,6 @@
   },
   "search": {
     "placeholder": "Busca: leche, pollo, arroz…",
-    "generic": "Genérico",
-    "genericSection": "Alimentos genéricos",
     "productsSection": "Otros productos en Perú",
     "customSection": "Tus alimentos",
     "noResults": "No encontramos \"{query}\".",
