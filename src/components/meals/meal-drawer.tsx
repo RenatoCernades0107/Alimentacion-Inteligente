@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/native-select";
 import { ScopeDialog } from "@/components/meals/scope-dialog";
+import { RecipeImage } from "@/components/recipe-image";
 import { addMeal, updateMeal, type Scope } from "@/app/actions/meals";
 import { mealTypeForSlot, RECURRENCES } from "@/lib/meals";
 import { localName, type MealSlot, type Recurrence, type Recipe } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export type RecipeOption = Pick<Recipe, "id" | "slug" | "name_es" | "name_en" | "emoji" | "meal_types" | "country">;
+export type RecipeOption = Pick<Recipe, "id" | "slug" | "name_es" | "name_en" | "emoji" | "image_url" | "meal_types" | "country">;
 
 export type MealDraft = {
   id?: string;
@@ -136,7 +137,7 @@ function MealForm({
           <Label>{t("recipe")}</Label>
           {selected ? (
             <div className="flex items-center gap-3 rounded-xl border bg-muted/50 p-2">
-              <span className="text-2xl">{selected.emoji}</span>
+              <RecipeImage src={selected.image_url} emoji={selected.emoji} />
               <span className="flex-1 font-medium">{localName(selected, locale)}</span>
               <Button type="button" variant="ghost" size="icon" onClick={() => setRecipeId(null)} aria-label={tc("close")}>
                 <X />
@@ -152,7 +153,7 @@ function MealForm({
                 {options.map((r) => (
                   <li key={r.id}>
                     <button type="button" onClick={() => setRecipeId(r.id)} className="flex w-full items-center gap-3 px-3 py-2 text-left active:bg-muted">
-                      <span className="text-xl">{r.emoji}</span>
+                      <RecipeImage src={r.image_url} emoji={r.emoji} className="size-8 rounded-lg text-xl" />
                       <span className="flex-1">{localName(r, locale)}</span>
                       <span className="text-sm">{r.country === "PE" ? "🇵🇪" : "🇺🇸"}</span>
                     </button>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { MealActionsDrawer } from "@/components/meals/meal-actions";
+import { RecipeImage } from "@/components/recipe-image";
 import { parseDate } from "@/lib/dates";
 import { mealName, type Meal, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,7 @@ export function HomeMeals({ meals, today, isParent, slots, showDate }: { meals: 
         {sorted.map((m) => (
           <li key={m.id}>
             <button onClick={() => setSelected(m)} className="flex w-full items-center gap-3 p-3 text-left active:bg-muted">
-              <span className="text-2xl">{m.recipe?.emoji ?? "🍽️"}</span>
+              <RecipeImage src={m.recipe?.image_url} emoji={m.recipe?.emoji} />
               <div className="min-w-0 flex-1">
                 <div className={cn("truncate font-medium", m.status === "completed" && "line-through opacity-60")}>{mealName(m, locale)}</div>
                 <div className="text-sm text-muted-foreground">

@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Plus, Repeat } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MealDrawer, type MealDraft, type RecipeOption } from "@/components/meals/meal-drawer";
 import { MealActionsDrawer } from "@/components/meals/meal-actions";
+import { RecipeImage } from "@/components/recipe-image";
 import { addDays, parseDate } from "@/lib/dates";
 import { mealName, type Meal, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -93,7 +94,7 @@ export function CalendarView({
                           m.status === "completed" && "opacity-60",
                         )}
                       >
-                        <span className="text-xl">{m.recipe?.emoji ?? "🍽️"}</span>
+                        <RecipeImage src={m.recipe?.image_url} emoji={m.recipe?.emoji} className="size-8 rounded-lg text-xl" />
                         <span className={cn("flex-1 font-medium", m.status === "completed" && "line-through")}>{mealName(m, locale)}</span>
                         {m.series_id && <Repeat className="size-3.5 text-muted-foreground" />}
                         {m.status === "proposed" && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-900">{t("proposed")}</span>}

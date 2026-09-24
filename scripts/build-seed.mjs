@@ -6,6 +6,7 @@ import { recipes } from "../supabase/data/recipes.mjs";
 
 const q = (v) => (v === null || v === undefined ? "null" : `'${String(v).replaceAll("'", "''")}'`);
 const arr = (a) => `array[${a.map(q).join(", ")}]::text[]`;
+const recipeImg = (slug) => (existsSync(new URL(`../public/recipes/${slug}.jpg`, import.meta.url)) ? `/recipes/${slug}.jpg` : null);
 const img = (name) => (name ? `https://www.themealdb.com/images/ingredients/${encodeURIComponent(name)}-small.png` : null);
 
 const foodByKey = new Map(foods.map((f) => [f[0], f]));
@@ -23,11 +24,11 @@ sql += "  emoji = excluded.emoji, image_url = excluded.image_url, shelf_life_day
 sql += "  default_unit = excluded.default_unit, aliases = excluded.aliases;\n\n";
 
 for (const r of recipes) {
-  sql += `insert into recipes (slug, country, name_es, name_en, description_es, description_en, emoji, meal_types, servings, time_minutes, source_url, steps_es, steps_en) values (\n`;
-  sql += `  ${q(r.slug)}, ${q(r.country)}, ${q(r.es)}, ${q(r.en)}, ${q(r.descEs)}, ${q(r.descEn)}, ${q(r.emoji)}, ${arr(r.meals)}, ${r.servings}, ${r.time ?? "null"}, ${q(r.source)},\n`;
+  sql += `insert into recipes (slug, country, name_es, name_en, description_es, description_en, emoji, image_url, meal_types, servings, time_minutes, source_url, steps_es, steps_en) values (\n`;
+  sql += `  ${q(r.slug)}, ${q(r.country)}, ${q(r.es)}, ${q(r.en)}, ${q(r.descEs)}, ${q(r.descEn)}, ${q(r.emoji)}, ${q(recipeImg(r.slug))}, ${arr(r.meals)}, ${r.servings}, ${r.time ?? "null"}, ${q(r.source)},\n`;
   sql += `  ${arr(r.stepsEs)}, ${arr(r.stepsEn)})\n`;
   sql += "on conflict (slug) do update set country = excluded.country, name_es = excluded.name_es, name_en = excluded.name_en,\n";
-  sql += "  description_es = excluded.description_es, description_en = excluded.description_en, emoji = excluded.emoji,\n";
+  sql += "  description_es = excluded.description_es, description_en = excluded.description_en, emoji = excluded.emoji, image_url = excluded.image_url,\n";
   sql += "  meal_types = excluded.meal_types, servings = excluded.servings, time_minutes = excluded.time_minutes,\n";
   sql += "  source_url = excluded.source_url, steps_es = excluded.steps_es, steps_en = excluded.steps_en;\n";
   sql += `delete from recipe_ingredients where recipe_id = (select id from recipes where slug = ${q(r.slug)});\n`;
