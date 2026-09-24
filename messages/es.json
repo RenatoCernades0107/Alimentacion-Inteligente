@@ -195,7 +195,8 @@
     "optional": "opcional",
     "missing": "Te falta",
     "addToCalendar": "Agregar al calendario",
-    "allMeals": "Todas"
+    "allMeals": "Todas",
+    "photoCredit": "Foto: {author} · {license}"
   },
   "family": {
     "title": "Familia",

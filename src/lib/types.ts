@@ -89,7 +89,7 @@ export type Meal = {
   status: MealStatus;
   proposed_by: string | null;
   completed_at: string | null;
-  recipe?: Pick<Recipe, "id" | "slug" | "name_es" | "name_en" | "emoji"> | null;
+  recipe?: Pick<Recipe, "id" | "slug" | "name_es" | "name_en" | "emoji" | "image_url"> | null;
   series?: { recurrence: Recurrence } | null;
   proposer?: { full_name: string | null } | null;
 };
