@@ -135,6 +135,8 @@
     "scanning": "Apunta la cámara al código de barras",
     "scanNotFound": "No encontramos el producto {code}. Búscalo por nombre o créalo.",
     "cameraError": "No se pudo acceder a la cámara.",
+    "manualCode": "¿No lo lee? Escribe el código",
+    "manualSearch": "Buscar",
     "searchingProducts": "Buscando productos…",
     "storesSection": "En supermercados",
     "soldAt": "Se vende en",

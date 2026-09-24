@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import type { IScannerControls } from "@zxing/browser";
 
-/** Lector de código de barras con la cámara trasera (funciona en Safari de iPhone). */
+/**
+ * Lector de código de barras con la cámara trasera.
+ * Usa zxing-cpp (WASM) vía `barcode-detector`, que funciona en Safari de iPhone.
+ */
 export function BarcodeScanner({ onDetected }: { onDetected: (code: string) => void }) {
   const t = useTranslations("search");
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -15,31 +17,56 @@ export function BarcodeScanner({ onDetected }: { onDetected: (code: string) => v
   }, [onDetected]);
 
   useEffect(() => {
-    let controls: IScannerControls | undefined;
-    let done = false;
+    let cancelled = false;
+    let stream: MediaStream | undefined;
+    let frame = 0;
+
+    const stop = () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      stream?.getTracks().forEach((track) => track.stop());
+    };
 
     (async () => {
       try {
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
-        const reader = new BrowserMultiFormatReader();
-        controls = await reader.decodeFromConstraints(
-          { video: { facingMode: "environment" } },
-          videoRef.current!,
-          (result) => {
-            if (result && !done) {
-              done = true;
-              controls?.stop();
+        const { BarcodeDetector } = await import("barcode-detector/ponyfill");
+        const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] });
+
+        // Resolución alta: a 640×480 (lo que da iOS por defecto) las barras salen borrosas.
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
+        });
+        if (cancelled) return stop();
+        const [track] = stream.getVideoTracks();
+        await track
+          .applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] })
+          .catch(() => {});
+
+        const video = videoRef.current!;
+        video.srcObject = stream;
+        await video.play();
+
+        const scan = async () => {
+          if (cancelled) return;
+          if (video.readyState >= video.HAVE_CURRENT_DATA) {
+            const [barcode] = await detector.detect(video).catch(() => []);
+            if (cancelled) return;
+            if (barcode) {
+              stop();
               navigator.vibrate?.(50);
-              onDetectedRef.current(result.getText());
+              onDetectedRef.current(barcode.rawValue);
+              return;
             }
-          },
-        );
+          }
+          frame = requestAnimationFrame(scan);
+        };
+        scan();
       } catch {
-        setError(true);
+        if (!cancelled) setError(true);
       }
     })();
 
-    return () => controls?.stop();
+    return stop;
   }, []);
 
   return (

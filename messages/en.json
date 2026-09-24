@@ -135,6 +135,8 @@
     "scanning": "Point the camera at the barcode",
     "scanNotFound": "Product {code} not found. Search by name or create it.",
     "cameraError": "Couldn't access the camera.",
+    "manualCode": "Can't scan? Type the code",
+    "manualSearch": "Search",
     "searchingProducts": "Searching products…",
     "storesSection": "In supermarkets",
     "soldAt": "Sold at",

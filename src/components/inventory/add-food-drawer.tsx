@@ -225,23 +225,56 @@ function ScanStep({ onFound, onNotFound }: { onFound: (p: OffProduct) => void; o
   const t = useTranslations("search");
   const locale = useLocale();
   const [loading, setLoading] = useState(false);
+  const [manual, setManual] = useState("");
 
   async function lookup(code: string) {
     setLoading(true);
-    // Primero en los supermercados peruanos, luego en Open Food Facts.
-    const { data } = await createClient().from("store_products").select("*").contains("barcodes", [code]).limit(1);
-    const store = (data as StoreProduct[] | null)?.[0];
-    if (store) return onFound(toProduct(store));
-    const res = await fetch(`/api/off/product/${code}?lang=${locale}`).then((r) => r.json()).catch(() => ({}));
+    try {
+      // UPC-A (12 dígitos) es el mismo código que el EAN-13 con un 0 adelante.
+      const codes = [code];
+      if (code.length === 12) codes.push(`0${code}`);
+      if (code.length === 13 && code.startsWith("0")) codes.push(code.slice(1));
+      // Primero en los supermercados peruanos, luego en Open Food Facts.
+      const { data } = await createClient().from("store_products").select("*").overlaps("barcodes", codes).limit(1);
+      const store = (data as StoreProduct[] | null)?.[0];
+      if (store) return onFound(toProduct(store));
+      const res = await fetch(`/api/off/product/${code}?lang=${locale}`).then((r) => r.json()).catch(() => ({}));
+      if (res.product) return onFound(res.product);
+    } catch {}
     setLoading(false);
-    if (res.product) onFound(res.product);
-    else {
-      toast.error(t("scanNotFound", { code }));
-      onNotFound();
-    }
+    toast.error(t("scanNotFound", { code }));
+    onNotFound();
   }
 
-  return loading ? <p className="py-10 text-center text-muted-foreground">{t("searchingProducts")}</p> : <BarcodeScanner onDetected={lookup} />;
+  if (loading) return <p className="py-10 text-center text-muted-foreground">{t("searchingProducts")}</p>;
+
+  return (
+    <div className="space-y-4">
+      <BarcodeScanner onDetected={lookup} />
+      <form
+        className="space-y-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          lookup(manual);
+        }}
+      >
+        <Label htmlFor="manual-barcode">{t("manualCode")}</Label>
+        <div className="flex gap-2">
+          <Input
+            id="manual-barcode"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="7750243067997"
+            value={manual}
+            onChange={(e) => setManual(e.target.value.replace(/\D/g, "").slice(0, 14))}
+          />
+          <Button type="submit" disabled={manual.length < 8}>
+            {t("manualSearch")}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 function CustomStep({ initialName, onCreated }: { initialName: string; onCreated: (f: Food) => void }) {
