@@ -145,7 +145,8 @@
     "change": "Change",
     "changeTitle": "Which food is it?",
     "notRecognized": "We didn't recognize this product. What is it like?",
-    "linkHint": "We use it for recipes, suggestions and meals."
+    "linkHint": "We use it for recipes, suggestions and meals.",
+    "photo": "Add from a photo"
   },
   "custom": {
     "title": "Create food",
@@ -277,5 +278,24 @@
     "noMealsBody": "Nothing is planned. How about {recipe}?",
     "pendingTitle": "Did you cook?",
     "pendingBody": "{count, plural, =1 {You have 1 meal not marked as done.} other {You have # meals not marked as done.}}"
+  },
+  "photo": {
+    "title": "Add from a photo",
+    "intro": "Take a photo of your food or your grocery receipt and we'll recognize it for you.",
+    "foodPhoto": "Photo of your food",
+    "foodPhotoHint": "On the table, in the fridge or in the bags.",
+    "receiptPhoto": "Photo of the receipt",
+    "receiptPhotoHint": "The full grocery receipt, clearly readable.",
+    "analyzingFood": "Recognizing your food…",
+    "analyzingReceipt": "Reading your receipt…",
+    "review": "Review what we found",
+    "reviewHint": "Fix anything that's off and uncheck what you don't want to add. The date is optional: leave it empty and we'll estimate it.",
+    "new": "New",
+    "name": "Name",
+    "lowConfidence": "We're not sure about this one, please check it.",
+    "addN": "{count, plural, =0 {Add} =1 {Add 1 item} other {Add # items}}",
+    "added": "{count, plural, =1 {1 item added} other {# items added}}",
+    "noneFound": "We couldn't find any food in the photo. Try a clearer one.",
+    "error": "We couldn't read the photo. Please try again."
   }
 }

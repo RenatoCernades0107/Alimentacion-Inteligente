@@ -145,7 +145,8 @@
     "change": "Cambiar",
     "changeTitle": "¿A qué alimento corresponde?",
     "notRecognized": "No reconocimos este producto, ¿a qué se parece?",
-    "linkHint": "Así lo usamos en recetas, sugerencias y comidas."
+    "linkHint": "Así lo usamos en recetas, sugerencias y comidas.",
+    "photo": "Agregar con una foto"
   },
   "custom": {
     "title": "Crear alimento",
@@ -277,5 +278,24 @@
     "noMealsBody": "No hay nada planificado. ¿Qué tal {recipe}?",
     "pendingTitle": "¿Ya cocinaron?",
     "pendingBody": "{count, plural, =1 {Tienes 1 comida sin marcar como completada.} other {Tienes # comidas sin marcar como completadas.}}"
+  },
+  "photo": {
+    "title": "Agregar con una foto",
+    "intro": "Toma una foto de tus alimentos o de la boleta del súper y los reconocemos por ti.",
+    "foodPhoto": "Foto de los alimentos",
+    "foodPhotoHint": "Sobre la mesa, en la refri o en las bolsas.",
+    "receiptPhoto": "Foto de la boleta",
+    "receiptPhotoHint": "La boleta o ticket del supermercado, completa y legible.",
+    "analyzingFood": "Reconociendo tus alimentos…",
+    "analyzingReceipt": "Leyendo tu boleta…",
+    "review": "Revisa lo que encontramos",
+    "reviewHint": "Corrige lo que haga falta y desmarca lo que no quieras agregar. La fecha es opcional: si la dejas vacía, la estimamos.",
+    "new": "Nuevo",
+    "name": "Nombre",
+    "lowConfidence": "No estamos seguros de este, revísalo.",
+    "addN": "{count, plural, =0 {Agregar} =1 {Agregar 1 alimento} other {Agregar # alimentos}}",
+    "added": "{count, plural, =1 {Se agregó 1 alimento} other {Se agregaron # alimentos}}",
+    "noneFound": "No encontramos alimentos en la foto. Intenta con otra más clara.",
+    "error": "No pudimos leer la foto. Inténtalo de nuevo."
   }
 }

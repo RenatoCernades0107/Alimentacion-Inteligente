@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, ScanBarcode, Search } from "lucide-react";
+import { ArrowLeft, Camera, Plus, ScanBarcode, Search } from "lucide-react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,15 +16,21 @@ import { addInventoryItem, createCustomFood } from "@/app/actions/inventory";
 import { UNITS } from "@/lib/units";
 import { localName, type Food, type Unit } from "@/lib/types";
 import type { OffProduct } from "@/lib/off";
-import { toProduct, type StoreId, type StoreProduct } from "@/lib/stores";
+import { toProduct, type StoreProduct } from "@/lib/stores";
 import { StoreBadges } from "@/components/store-badges";
+import { GenericFoodLink, ResultRow, useDebounced } from "@/components/inventory/food-picker";
+import { PhotoStep } from "@/components/inventory/photo-step";
+import { ReviewStep } from "@/components/inventory/review-step";
+import type { DetectedItem } from "@/lib/photo";
 
 type Selection = { kind: "food"; food: Food } | { kind: "product"; product: OffProduct };
-type Step = "search" | "scan" | "details" | "custom";
+type Step = "search" | "scan" | "details" | "custom" | "photo" | "review";
 
 export function AddFoodDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useTranslations("search");
   const ti = useTranslations("inventory");
+  const tp = useTranslations("photo");
+  const [detected, setDetected] = useState<DetectedItem[]>([]);
   const [step, setStep] = useState<Step>("search");
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -36,14 +42,14 @@ export function AddFoodDrawer({ open, onOpenChange }: { open: boolean; onOpenCha
   }
 
   const title =
-    step === "details" ? ti("add") : step === "custom" ? t("createCustom", { query }) : step === "scan" ? t("scan") : ti("add");
+    step === "custom" ? t("createCustom", { query }) : step === "scan" ? t("scan") : step === "photo" ? tp("title") : step === "review" ? tp("review") : ti("add");
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="h-[92dvh]">
         <DrawerHeader className="flex-row items-center gap-2 pb-2 text-left">
           {step !== "search" && (
-            <Button variant="ghost" size="icon" onClick={() => setStep("search")} aria-label="back">
+            <Button variant="ghost" size="icon" onClick={() => setStep(step === "review" ? "photo" : "search")} aria-label="back">
               <ArrowLeft />
             </Button>
           )}
@@ -56,10 +62,20 @@ export function AddFoodDrawer({ open, onOpenChange }: { open: boolean; onOpenCha
               setQuery={setQuery}
               onSelect={select}
               onScan={() => setStep("scan")}
+              onPhoto={() => setStep("photo")}
               onCreate={() => setStep("custom")}
             />
           )}
           {step === "scan" && <ScanStep onFound={(product) => select({ kind: "product", product })} onNotFound={() => setStep("search")} />}
+          {step === "photo" && (
+            <PhotoStep
+              onDetected={(items) => {
+                setDetected(items);
+                setStep("review");
+              }}
+            />
+          )}
+          {step === "review" && <ReviewStep items={detected} onDone={() => onOpenChange(false)} />}
           {step === "custom" && <CustomStep initialName={query} onCreated={(food) => select({ kind: "food", food })} />}
           {step === "details" && selection && <DetailsStep selection={selection} onDone={() => onOpenChange(false)} />}
         </div>
@@ -68,22 +84,14 @@ export function AddFoodDrawer({ open, onOpenChange }: { open: boolean; onOpenCha
   );
 }
 
-function useDebounced<T>(value: T, ms: number) {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const id = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(id);
-  }, [value, ms]);
-  return v;
-}
-
 function SearchStep({
-  query, setQuery, onSelect, onScan, onCreate,
+  query, setQuery, onSelect, onScan, onPhoto, onCreate,
 }: {
   query: string;
   setQuery: (q: string) => void;
   onSelect: (s: Selection) => void;
   onScan: () => void;
+  onPhoto: () => void;
   onCreate: () => void;
 }) {
   const t = useTranslations("search");
@@ -143,6 +151,9 @@ function SearchStep({
         </div>
         <Button variant="outline" size="icon-lg" className="size-11" onClick={onScan} aria-label={t("scan")}>
           <ScanBarcode className="size-5" />
+        </Button>
+        <Button variant="outline" size="icon-lg" className="size-11" onClick={onPhoto} aria-label={t("photo")}>
+          <Camera className="size-5" />
         </Button>
       </div>
 
@@ -207,28 +218,6 @@ function ResultGroup({ title, children }: { title: string; children: React.React
       <h3 className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
       <div className="space-y-0.5">{children}</div>
     </div>
-  );
-}
-
-function ResultRow({
-  image, emoji, title, subtitle, stores, onClick,
-}: {
-  image: string | null;
-  emoji: string | null;
-  title: string;
-  subtitle?: string;
-  stores?: StoreId[];
-  onClick: () => void;
-}) {
-  return (
-    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-xl p-2 text-left active:bg-muted">
-      <FoodImage src={image} emoji={emoji} alt={title} />
-      <div className="min-w-0 flex-1">
-        <div className="line-clamp-2 font-medium leading-snug">{title}</div>
-        {subtitle && <div className="truncate text-sm text-muted-foreground">{subtitle}</div>}
-        {stores && stores.length > 0 && <StoreBadges stores={stores} className="mt-1" />}
-      </div>
-    </button>
   );
 }
 
@@ -485,66 +474,4 @@ async function guessGenericFood(product: OffProduct): Promise<Food | null> {
     if (food) return food;
   }
   return null;
-}
-
-/** "Se cuenta como 🥛 Leche · Cambiar"; si no se reconoce, un buscador de alimentos genéricos. */
-function GenericFoodLink({
-  food, guessing, picking, onChange, onPick,
-}: {
-  food: Food | null;
-  guessing: boolean;
-  picking: boolean;
-  onChange: () => void;
-  onPick: (f: Food) => void;
-}) {
-  const t = useTranslations("search");
-  const locale = useLocale();
-  const [query, setQuery] = useState("");
-  const debounced = useDebounced(query.trim(), 250);
-  const [results, setResults] = useState<{ q: string; foods: Food[] }>({ q: "", foods: [] });
-
-  useEffect(() => {
-    if (!debounced) return;
-    let cancelled = false;
-    createClient()
-      .rpc("search_foods", { p_query: debounced, p_limit: 6 })
-      .then(({ data }) => !cancelled && setResults({ q: debounced, foods: (data as Food[]) ?? [] }));
-    return () => {
-      cancelled = true;
-    };
-  }, [debounced]);
-
-  if (guessing) return <p className="text-sm text-muted-foreground">{t("recognizing")}</p>;
-
-  if (!picking && food) {
-    return (
-      <div className="flex items-center gap-3 rounded-xl bg-muted/60 p-2.5">
-        <FoodImage src={food.image_url} emoji={food.emoji} alt={localName(food, locale)} className="size-10" />
-        <div className="min-w-0 flex-1 text-sm">
-          <div className="text-muted-foreground">{t("countsAs")}</div>
-          <div className="truncate font-medium">{localName(food, locale)}</div>
-        </div>
-        <Button type="button" variant="ghost" size="sm" onClick={onChange}>{t("change")}</Button>
-      </div>
-    );
-  }
-
-  const foods = results.q === debounced ? results.foods : [];
-  return (
-    <div className="space-y-2">
-      <Label htmlFor="generic-food">{food ? t("changeTitle") : t("notRecognized")}</Label>
-      <div className="relative">
-        <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input id="generic-food" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("placeholder")} className="h-10 pl-9" />
-      </div>
-      {foods.length > 0 && (
-        <div className="space-y-0.5">
-          {foods.map((f) => (
-            <ResultRow key={f.id} image={f.image_url} emoji={f.emoji} title={localName(f, locale)} onClick={() => onPick(f)} />
-          ))}
-        </div>
-      )}
-      <p className="text-xs text-muted-foreground">{t("linkHint")}</p>
-    </div>
-  );
 }
