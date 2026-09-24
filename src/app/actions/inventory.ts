@@ -21,15 +21,16 @@ function cleanUnit(u: string): Unit {
   return (UNITS as string[]).includes(u) ? (u as Unit) : "unit";
 }
 
-export async function addInventoryItem(input: NewItem) {
-  const { supabase, family, user } = await requireParent();
+type Session = Awaited<ReturnType<typeof requireParent>>;
+
+/** Fila de inventario lista para insertar; sin fecha, se estima según la vida útil del alimento. */
+async function buildRow({ supabase, family, user }: Session, input: NewItem) {
   if (!input.food_id && !input.product_name) throw new Error("invalid");
 
   let expires_on = isValidDate(input.expires_on) ? input.expires_on : null;
   let expiry_estimated = false;
 
-  // Genéricos sin fecha: se estima según la vida útil del alimento.
-  if (!expires_on && input.food_id && !input.barcode) {
+  if (!expires_on && input.food_id) {
     const { data: food } = await supabase.from("foods").select("shelf_life_days").eq("id", input.food_id).single();
     if (food?.shelf_life_days) {
       expires_on = addDays(todayIn(family.timezone), food.shelf_life_days);
@@ -37,7 +38,7 @@ export async function addInventoryItem(input: NewItem) {
     }
   }
 
-  const { error } = await supabase.from("inventory_items").insert({
+  return {
     family_id: family.id,
     food_id: input.food_id || null,
     barcode: input.barcode || null,
@@ -49,9 +50,31 @@ export async function addInventoryItem(input: NewItem) {
     expires_on,
     expiry_estimated,
     created_by: user.id,
-  });
+  };
+}
+
+export async function addInventoryItem(input: NewItem) {
+  const session = await requireParent();
+  const { error } = await session.supabase.from("inventory_items").insert(await buildRow(session, input));
   if (error) throw new Error(error.message);
   revalidatePath("/", "layout");
+}
+
+export type NewFood = { name: string; emoji?: string; default_unit: Unit; shelf_life_days?: number | null };
+
+/** Agrega varios alimentos de una vez (foto o boleta); los que no existen se crean como propios. */
+export async function addInventoryItems(items: (NewItem & { new_food?: NewFood | null })[]) {
+  const session = await requireParent();
+  if (!items.length || items.length > 100) throw new Error("invalid");
+  const rows = [];
+  for (const item of items) {
+    const food_id = item.new_food ? (await insertCustomFood(session, item.new_food)).id : item.food_id;
+    rows.push(await buildRow(session, { ...item, food_id }));
+  }
+  const { error } = await session.supabase.from("inventory_items").insert(rows);
+  if (error) throw new Error(error.message);
+  revalidatePath("/", "layout");
+  return rows.length;
 }
 
 export async function updateInventoryItem(id: string, input: { quantity: number; unit: Unit; expires_on: string | null }) {
@@ -78,8 +101,11 @@ export async function deleteInventoryItem(id: string) {
 }
 
 /** Crea un alimento propio de la familia (ej. "salsa de tamarindo con miel picante"). */
-export async function createCustomFood(input: { name: string; emoji?: string; default_unit: Unit; shelf_life_days?: number | null }) {
-  const { supabase, family, user } = await requireParent();
+export async function createCustomFood(input: NewFood) {
+  return insertCustomFood(await requireParent(), input);
+}
+
+async function insertCustomFood({ supabase, family, user }: Session, input: NewFood) {
   const name = input.name.trim().slice(0, 80);
   if (!name) throw new Error("invalid");
   const { data, error } = await supabase
