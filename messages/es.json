@@ -177,7 +177,11 @@
     "empty": "Sin planificar",
     "viewRecipe": "Ver receta",
     "repeats": "Se repite",
-    "childHint": "Puedes proponer comidas. Tus padres deben aceptarlas."
+    "childHint": "Puedes proponer comidas. Tus padres deben aceptarlas.",
+    "plannedCount": "{done} de {total} planificadas",
+    "addTo": "Agregar {slot}",
+    "prevWeek": "Semana anterior",
+    "nextWeek": "Semana siguiente"
   },
   "recipes": {
     "title": "Recetas",

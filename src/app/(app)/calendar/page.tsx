@@ -20,7 +20,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
 
   await materializeSeries(family.id, weekEnd > addDays(today, 14) ? weekEnd : addDays(today, 14));
 
-  const [{ data: meals }, { data: recipes }] = await Promise.all([
+  const [{ data: meals }, { data: recipes }, { data: nearby }] = await Promise.all([
     supabase
       .from("meals")
       .select("*, recipe:recipes(id, slug, name_es, name_en, emoji, image_url), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)")
@@ -30,6 +30,14 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
       .neq("status", "cancelled")
       .order("created_at"),
     supabase.from("recipes").select("id, slug, name_es, name_en, emoji, image_url, meal_types, country").order("name_es"),
+    // Días con comidas alrededor de la semana, para marcarlos en el selector de mes.
+    supabase
+      .from("meals")
+      .select("date")
+      .eq("family_id", family.id)
+      .gte("date", addDays(weekStart, -42))
+      .lte("date", addDays(weekEnd, 42))
+      .neq("status", "cancelled"),
   ]);
 
   return (
@@ -40,6 +48,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
         today={today}
         weekStart={weekStart}
         meals={(meals ?? []) as Meal[]}
+        mealDates={[...new Set((nearby ?? []).map((m) => m.date as string))]}
         recipes={(recipes ?? []) as RecipeOption[]}
         slots={slotsFor(family.meals_per_day)}
         isParent={isParent}

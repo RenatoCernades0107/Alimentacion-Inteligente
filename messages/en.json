@@ -177,7 +177,11 @@
     "empty": "Not planned",
     "viewRecipe": "View recipe",
     "repeats": "Repeats",
-    "childHint": "You can propose meals. Your parents need to accept them."
+    "childHint": "You can propose meals. Your parents need to accept them.",
+    "plannedCount": "{done} of {total} planned",
+    "addTo": "Add {slot}",
+    "prevWeek": "Previous week",
+    "nextWeek": "Next week"
   },
   "recipes": {
     "title": "Recipes",
