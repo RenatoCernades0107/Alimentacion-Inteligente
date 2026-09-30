@@ -445,6 +445,25 @@
     "kcalChipApprox": "~{kcal} kcal",
     "kcalPerServing": "kcal por porción",
     "kcalManual": "kcal por porción (opcional)",
-    "kcalManualHint": "Con esto calculamos cuánto le toca a cada integrante."
+    "kcalManualHint": "Con esto calculamos cuánto le toca a cada integrante.",
+    "unitOne": "porción",
+    "unitMany": "porciones",
+    "mine": "{portion} {unit} · {kcal} kcal",
+    "shared": "Se reparte con {count, plural, one {otra comida} other {# comidas más}} de la franja."
+  },
+  "dayGoal": {
+    "title": "Tu meta del día",
+    "of": "{total} de {target} kcal",
+    "done": "Completadas",
+    "planned": "Planificadas",
+    "low": "Faltan ~{kcal} kcal para tu meta",
+    "ok": "Tu plan cubre tu meta del día",
+    "over": "~{kcal} kcal por encima de tu meta",
+    "empty": "Planifica comidas con kcal para ver cuánto cubres de tu meta.",
+    "unknown": "{count, plural, one {# comida sin kcal no cuenta} other {# comidas sin kcal no cuentan}}",
+    "complete": "Completa tus datos para ver tu meta de kcal.",
+    "completeAction": "Completar",
+    "parentsHint": "Un padre o madre debe completar tus datos para ver tu meta de kcal.",
+    "progress": "Progreso de tu meta de kcal: {percent}%"
   }
 }

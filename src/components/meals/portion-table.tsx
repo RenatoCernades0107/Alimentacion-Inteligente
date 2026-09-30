@@ -69,7 +69,10 @@ export function PortionTable({
       <div className="flex items-start justify-between gap-2 px-3 pt-2.5">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold">{t("title")}</h3>
-          <p className="text-xs text-muted-foreground">{t("share", { percent: Math.round(data.share * 100) })}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("share", { percent: Math.round(data.share * 100) })}
+            {data.siblings > 1 && ` · ${t("shared", { count: data.siblings - 1 })}`}
+          </p>
         </div>
         {data.kcalPerServing !== null && (
           <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">

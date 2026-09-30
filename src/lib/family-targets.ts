@@ -1,28 +1,17 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/server";
-import { dailyTarget, type BodyData, type LogPoint } from "@/lib/body";
+import { dailyTarget } from "@/lib/body";
+import { toBodyData, toLogPoints, type LogRow } from "@/lib/body-data";
 import { addDays, todayIn } from "@/lib/dates";
 import { memberAvatarSrc } from "@/lib/avatars";
 import type { MemberTarget } from "@/lib/portions";
 import type { BodyRow, Family, Role } from "@/lib/types";
 
-type LogRow = { body_id: string; logged_on: string; weight_kg: number; height_cm: number | null };
+type BodyLog = LogRow & { body_id: string };
 
 /** Solo los últimos días influyen en el peso tendencia (constante de 7 días). */
 const LOG_WINDOW_DAYS = 60;
-
-const toBodyData = (b: BodyRow | undefined): BodyData => ({
-  sex: b?.sex ?? null,
-  birthDate: b?.birth_date ?? null,
-  heightCm: b?.height_cm != null ? Number(b.height_cm) : null,
-  activity: b?.activity ?? "light",
-  goalKg: b?.goal_weight_kg != null ? Number(b.goal_weight_kg) : null,
-  pace: b?.goal_pace ?? "recommended",
-});
-
-const toLogPoints = (rows: LogRow[] | undefined): LogPoint[] =>
-  (rows ?? []).map((r) => ({ on: r.logged_on, kg: Number(r.weight_kg), cm: r.height_cm != null ? Number(r.height_cm) : null }));
 
 /**
  * Calcula las kcal diarias de todas las personas de la familia (cuentas y dependientes).
@@ -56,7 +45,7 @@ export async function loadFamilyTargets(viewer: {
   const visibleIds = new Set(((visible ?? []) as { id: string }[]).map((b) => b.id));
 
   const bodyIds = [...bodyByProfile.values(), ...bodyByDependent.values()].map((b) => b.id);
-  const logsByBody = new Map<string, LogRow[]>();
+  const logsByBody = new Map<string, BodyLog[]>();
   if (bodyIds.length) {
     const { data: logs } = await admin
       .from("weight_logs")
@@ -64,7 +53,7 @@ export async function loadFamilyTargets(viewer: {
       .in("body_id", bodyIds)
       .gte("logged_on", addDays(today, -LOG_WINDOW_DAYS))
       .order("logged_on");
-    for (const l of (logs ?? []) as LogRow[]) logsByBody.set(l.body_id, [...(logsByBody.get(l.body_id) ?? []), l]);
+    for (const l of (logs ?? []) as BodyLog[]) logsByBody.set(l.body_id, [...(logsByBody.get(l.body_id) ?? []), l]);
 
     // Quien no pesó en la ventana: se toma su último pesaje (así se detecta que está desactualizado).
     await Promise.all(
@@ -77,7 +66,7 @@ export async function loadFamilyTargets(viewer: {
             .eq("body_id", id)
             .order("logged_on", { ascending: false })
             .limit(1);
-          if (data?.length) logsByBody.set(id, data as LogRow[]);
+          if (data?.length) logsByBody.set(id, data as BodyLog[]);
         }),
     );
   }

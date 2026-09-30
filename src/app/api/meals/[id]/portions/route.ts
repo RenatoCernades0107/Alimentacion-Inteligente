@@ -23,12 +23,13 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/meals/[
   // El cliente con RLS del usuario garantiza que la comida es de su familia.
   const { data } = await supabase
     .from("meals")
-    .select("id, slot, portion_scale, kcal_per_serving, recipe:recipes(servings)")
+    .select("id, date, slot, portion_scale, kcal_per_serving, recipe:recipes(servings)")
     .eq("id", id)
     .maybeSingle();
   if (!data) return NextResponse.json({ error: "not found" }, { status: 404 });
   const meal = data as unknown as {
     id: string;
+    date: string;
     slot: MealSlot;
     portion_scale: number;
     kcal_per_serving: number | null;
@@ -49,6 +50,16 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/meals/[
     perServing = meal.kcal_per_serving;
   }
 
+  // La franja se reparte entre las comidas planificadas ese día (una sopa y un segundo, por ejemplo).
+  const { count: others } = await supabase
+    .from("meals")
+    .select("id", { count: "exact", head: true })
+    .eq("family_id", family.id)
+    .eq("date", meal.date)
+    .eq("slot", meal.slot)
+    .neq("id", meal.id)
+    .in("status", ["planned", "completed"]);
+
   const targets = await loadFamilyTargets({ supabase, userId: user.id, isParent: profile.role === "parent", family });
   const portions = buildPortions({
     targets,
@@ -59,6 +70,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/meals/[
     mealsPerDay: family.meals_per_day,
     recipeServings: meal.recipe?.servings ?? null,
     scale: Number(meal.portion_scale) || 1,
+    siblings: 1 + (others ?? 0),
   });
   return NextResponse.json(portions, { headers: { "Cache-Control": "no-store" } });
 }

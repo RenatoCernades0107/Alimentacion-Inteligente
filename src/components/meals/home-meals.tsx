@@ -7,11 +7,23 @@ import { MealActionsDrawer } from "@/components/meals/meal-actions";
 import { RecipeImage } from "@/components/recipe-image";
 import { KcalChip } from "@/components/meals/kcal-chip";
 import { parseDate } from "@/lib/dates";
+import { slotSiblings } from "@/lib/meals";
 import { mealName, type Meal, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** Lista compacta de comidas con sus acciones (completar, aceptar propuesta…). */
-export function HomeMeals({ meals, today, isParent, slots, showDate }: { meals: Meal[]; today: string; isParent: boolean; slots: MealSlot[]; showDate?: boolean }) {
+export function HomeMeals({
+  meals, today, isParent, slots, showDate, mealsPerDay, myKcal,
+}: {
+  meals: Meal[];
+  today: string;
+  isParent: boolean;
+  slots: MealSlot[];
+  showDate?: boolean;
+  /** Comidas al día de la familia y meta diaria de kcal de quien mira (null si faltan sus datos). */
+  mealsPerDay: number;
+  myKcal: number | null;
+}) {
   const t = useTranslations("calendar");
   const ts = useTranslations("slots");
   const locale = useLocale();
@@ -35,7 +47,7 @@ export function HomeMeals({ meals, today, isParent, slots, showDate }: { meals: 
                     {showDate && <span className="capitalize">{fmt.format(parseDate(m.date))} · </span>}
                     {ts(m.slot)}
                   </span>
-                  <KcalChip meal={m} />
+                  <KcalChip meal={m} siblings={slotSiblings(m, meals)} myKcal={myKcal} mealsPerDay={mealsPerDay} />
                 </div>
               </div>
               {m.status === "proposed" && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-900">{t("proposed")}</span>}

@@ -7,6 +7,7 @@ import { addDays, todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
 import { suggest } from "@/lib/suggestions";
 import { loadRecipesAndInventory } from "@/lib/recipes";
+import { loadMyTarget } from "@/lib/my-target";
 import { Section } from "@/components/page-header";
 import { FoodImage } from "@/components/food-image";
 import { RecipeImage } from "@/components/recipe-image";
@@ -18,7 +19,7 @@ import { HomeMeals } from "@/components/meals/home-meals";
 import { itemName, localName, type InventoryItem, type Meal } from "@/lib/types";
 
 export default async function HomePage() {
-  const { supabase, family, profile, isParent } = await requireMember();
+  const { supabase, family, profile, isParent, user } = await requireMember();
   const t = await getTranslations("home");
   const tw = await getTranslations("weight");
   const locale = await getLocale();
@@ -27,7 +28,7 @@ export default async function HomePage() {
   await materializeSeries(family.id, addDays(today, 14));
 
   const mealSelect = "*, recipe:recipes(id, slug, name_es, name_en, emoji, image_url, servings, kcal_per_serving, kcal_complete), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)";
-  const [{ data: todayMeals }, { data: proposals }, { data: pending }, { data: expiring }, { recipes, inventory }, { data: myBody }] = await Promise.all([
+  const [{ data: todayMeals }, { data: proposals }, { data: pending }, { data: expiring }, { recipes, inventory }, myTarget] = await Promise.all([
     supabase.from("meals").select(mealSelect).eq("family_id", family.id).eq("date", today).neq("status", "cancelled"),
     isParent
       ? supabase.from("meals").select(mealSelect).eq("family_id", family.id).eq("status", "proposed").gte("date", today).order("date")
@@ -37,15 +38,10 @@ export default async function HomePage() {
       : Promise.resolve({ data: [] }),
     supabase.from("inventory_items").select("*, food:foods(*)").eq("family_id", family.id).not("expires_on", "is", null).lte("expires_on", addDays(today, 7)).order("expires_on"),
     loadRecipesAndInventory(supabase, family.id),
-    // Datos corporales propios (RLS): para invitar a completarlos.
-    isParent
-      ? supabase.from("body_profiles").select("id, sex, birth_date, height_cm").eq("profile_id", profile.id).maybeSingle()
-      : Promise.resolve({ data: null }),
+    // Meta diaria propia (RLS): para las porciones de cada comida y para invitar a completar los datos.
+    loadMyTarget(supabase, user.id, family.timezone),
   ]);
-  const { count: myLogs } = myBody
-    ? await supabase.from("weight_logs").select("id", { count: "exact", head: true }).eq("body_id", myBody.id)
-    : { count: 0 };
-  const needsBody = isParent && (!myBody || !myBody.sex || !myBody.birth_date || !myBody.height_cm || !myLogs);
+  const needsBody = isParent && myTarget.state === "incomplete";
 
   const slots = slotsFor(family.meals_per_day);
   const suggestions = (todayMeals ?? []).length === 0
@@ -82,13 +78,13 @@ export default async function HomePage() {
 
       {(proposals ?? []).length > 0 && (
         <Section title={t("proposals")}>
-          <HomeMeals meals={proposals as Meal[]} today={today} isParent={isParent} slots={slots} showDate />
+          <HomeMeals meals={proposals as Meal[]} today={today} isParent={isParent} slots={slots} showDate mealsPerDay={family.meals_per_day} myKcal={myTarget.kcal} />
         </Section>
       )}
 
       <Section title={t("todayMeals")} action={<Link href="/calendar" className="text-sm text-primary">→</Link>}>
         {(todayMeals ?? []).length > 0 ? (
-          <HomeMeals meals={todayMeals as Meal[]} today={today} isParent={isParent} slots={slots} />
+          <HomeMeals meals={todayMeals as Meal[]} today={today} isParent={isParent} slots={slots} mealsPerDay={family.meals_per_day} myKcal={myTarget.kcal} />
         ) : (
           <div className="rounded-2xl border bg-card p-4">
             <p className="text-muted-foreground">{t("noMealsToday")}</p>
@@ -111,7 +107,7 @@ export default async function HomePage() {
       {(pending ?? []).length > 0 && (
         <Section title={t("pendingCompletion")}>
           <p className="mb-2 text-sm text-muted-foreground">{t("pendingCompletionHint")}</p>
-          <HomeMeals meals={pending as Meal[]} today={today} isParent={isParent} slots={slots} showDate />
+          <HomeMeals meals={pending as Meal[]} today={today} isParent={isParent} slots={slots} showDate mealsPerDay={family.meals_per_day} myKcal={myTarget.kcal} />
         </Section>
       )}
 

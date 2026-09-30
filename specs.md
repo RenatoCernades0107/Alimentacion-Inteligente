@@ -47,6 +47,7 @@ App PWA (inicialmente para celular) optimizada para iPhone, cuya misión es gest
 
 9. **Calorías y porciones por comida.** Cada comida muestra sus kcal aproximadas por porción (suma de sus ingredientes; en comidas sin receta se ingresan a mano).
    - Cada comida muestra una **tabla de porciones**: cuánto le corresponde a cada integrante y cuántas kcal aporta, según su meta diaria y la franja del día (con 3 comidas: 25% desayuno, 40% almuerzo, 35% cena).
+   - Cada comida muestra además la porción y las kcal de quien la mira, y el calendario tiene una barra con el avance de su meta de kcal del día (lo completado y lo planificado). Las comidas de una misma franja se reparten las kcal de esa franja.
    - Si la familia necesita más o menos porciones que las que rinde la receta, la app sugiere el multiplicador y, al ajustarlo, el inventario se descuenta con las cantidades ajustadas.
 
 ## Requerimientos no funcionales

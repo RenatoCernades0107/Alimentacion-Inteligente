@@ -445,6 +445,25 @@
     "kcalChipApprox": "~{kcal} kcal",
     "kcalPerServing": "kcal per serving",
     "kcalManual": "kcal per serving (optional)",
-    "kcalManualHint": "We use it to work out how much each member gets."
+    "kcalManualHint": "We use it to work out how much each member gets.",
+    "unitOne": "serving",
+    "unitMany": "servings",
+    "mine": "{portion} {unit} · {kcal} kcal",
+    "shared": "Shared with {count, plural, one {another meal} other {# more meals}} in this slot."
+  },
+  "dayGoal": {
+    "title": "Your goal for the day",
+    "of": "{total} of {target} kcal",
+    "done": "Completed",
+    "planned": "Planned",
+    "low": "~{kcal} kcal left to reach your goal",
+    "ok": "Your plan covers your goal for the day",
+    "over": "~{kcal} kcal above your goal",
+    "empty": "Plan meals with kcal to see how much of your goal you cover.",
+    "unknown": "{count, plural, one {# meal without kcal is not counted} other {# meals without kcal are not counted}}",
+    "complete": "Complete your details to see your kcal goal.",
+    "completeAction": "Complete",
+    "parentsHint": "A parent needs to complete your details to see your kcal goal.",
+    "progress": "Progress toward your kcal goal: {percent}%"
   }
 }

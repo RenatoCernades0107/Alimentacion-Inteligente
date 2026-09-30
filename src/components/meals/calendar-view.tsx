@@ -13,7 +13,9 @@ import { MealDrawer, type MealDraft, type RecipeOption } from "@/components/meal
 import { MealActionsDrawer } from "@/components/meals/meal-actions";
 import { RecipeImage } from "@/components/recipe-image";
 import { KcalChip } from "@/components/meals/kcal-chip";
+import { DayGoal } from "@/components/meals/day-goal";
 import { addDays, parseDate } from "@/lib/dates";
+import { slotSiblings } from "@/lib/meals";
 import { mealName, type Meal, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +37,7 @@ const fromLocal = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export function CalendarView({
-  date, today, weekStart, meals, mealDates, recipes, slots, isParent,
+  date, today, weekStart, meals, mealDates, recipes, slots, isParent, mealsPerDay, myKcal, myState, canEditData,
 }: {
   date: string;
   today: string;
@@ -45,6 +47,13 @@ export function CalendarView({
   recipes: RecipeOption[];
   slots: MealSlot[];
   isParent: boolean;
+  /** Comidas al día de la familia: define cuánto de la meta diaria corresponde a cada franja. */
+  mealsPerDay: number;
+  /** Meta diaria de kcal de quien mira; null si faltan sus datos. */
+  myKcal: number | null;
+  myState: "ok" | "incomplete" | "infant";
+  /** Puede completar sus propios datos (un hijo menor no). */
+  canEditData: boolean;
 }) {
   const t = useTranslations("calendar");
   const ts = useTranslations("slots");
@@ -171,6 +180,9 @@ export function CalendarView({
         </div>
       </div>
 
+      {/* Progreso de la meta de kcal del día */}
+      <DayGoal meals={dayMeals} myKcal={myKcal} state={myState} canEdit={canEditData} mealsPerDay={mealsPerDay} />
+
       {/* Línea de tiempo por franja */}
       <ol className="relative mt-4 space-y-4 before:absolute before:top-4 before:bottom-4 before:left-[15px] before:w-0.5 before:rounded-full before:bg-border">
         {slots.map((slot) => {
@@ -221,10 +233,10 @@ export function CalendarView({
                           <span className={cn("block truncate font-semibold", m.status === "completed" && "text-muted-foreground line-through")}>
                             {mealName(m, locale)}
                           </span>
-                          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                             {m.status === "proposed" && <span className="rounded-full bg-amber-200 px-2 py-0.5 font-medium text-amber-900">{t("proposed")}</span>}
                             {m.status === "completed" && <span className="font-medium text-primary">{t("completed")}</span>}
-                            <KcalChip meal={m} />
+                            <KcalChip meal={m} siblings={slotSiblings(m, dayMeals)} myKcal={myKcal} mealsPerDay={mealsPerDay} />
                             {m.series_id && (
                               <span className="inline-flex items-center gap-1">
                                 <Repeat className="size-3" /> {t("repeats")}

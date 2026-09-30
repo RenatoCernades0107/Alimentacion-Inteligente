@@ -24,6 +24,17 @@ export function mealKcal(meal: Pick<Meal, "recipe" | "custom_items" | "kcal_per_
   return meal.kcal_per_serving ? { kcal: meal.kcal_per_serving, approx: false } : null;
 }
 
+/**
+ * Cuántas comidas se reparten la franja de `meal` (ella incluida): las otras planificadas o completadas del mismo
+ * día y franja. Una propuesta cuenta como si ya estuviera aceptada.
+ */
+export function slotSiblings(
+  meal: Pick<Meal, "id" | "date" | "slot">,
+  meals: Pick<Meal, "id" | "date" | "slot" | "status">[],
+) {
+  return 1 + meals.filter((m) => m.id !== meal.id && m.date === meal.date && m.slot === meal.slot && (m.status === "planned" || m.status === "completed")).length;
+}
+
 /** Tipo de receta que corresponde a cada franja. */
 export function mealTypeForSlot(slot: MealSlot) {
   return slot === "morning_snack" || slot === "afternoon_snack" ? "snack" : slot;
