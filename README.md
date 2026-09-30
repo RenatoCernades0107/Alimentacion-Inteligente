@@ -8,18 +8,32 @@ PWA para gestionar el inventario de comida de la familia y planificar sus comida
 
 | Ruta | Qué hay |
 | --- | --- |
-| `src/app/(app)/` | Pantallas: Hoy, Alimentos, Calendario, Recetas, Familia |
+| `src/app/(app)/` | Pantallas: Hoy, Alimentos, Calendario, Recetas, Familia y `weight/[id]` (peso, meta y calorías de cada integrante) |
 | `src/app/actions/` | Server actions (inventario, comidas, familia, push) |
 | `src/app/api/off/` | Proxy a Open Food Facts (búsqueda y código de barras) |
 | `src/app/api/cron/daily/` | Recordatorios diarios (vencimientos, días sin comidas, comidas sin completar) |
-| `src/lib/` | Lógica: recurrencias, sugerencias, unidades, push |
+| `src/lib/` | Lógica: recurrencias, sugerencias, unidades, push, y el cálculo de peso y calorías (`body.ts`, `nutrition.ts`, `portions.ts`, `family-targets.ts`) |
+| `src/app/api/meals/[id]/portions/` | Tabla de porciones de una comida (se pide al abrirla) |
+| `supabase/tests/` | Pruebas de permisos (RLS + funciones) en SQL: `body_rls.sql` |
 | `supabase/migrations/` | Esquema, RLS (permisos padres/hijos) y funciones |
-| `supabase/data/` | Catálogo de alimentos y recetas (Perú / USA) → `node scripts/build-seed.mjs` genera `supabase/seed.sql` |
+| `supabase/data/` | Catálogo de alimentos, sus kcal (`nutrition.mjs`) y recetas (Perú / USA) → `node scripts/build-seed.mjs` genera `supabase/seed.sql` |
 | `messages/` | Textos en español e inglés |
+
+## Peso, metas y calorías
+
+Cada integrante (con cuenta o **sin cuenta**, como un bebé) tiene una ficha en `/weight/[id]`: sexo, fecha de nacimiento, estatura, actividad, registro de pesos con gráfico de tendencia y una **meta de peso** con un control que muestra bajo peso ← recomendado → sobrepeso. De ahí salen sus kcal diarias y un plazo; cada comida muestra sus kcal y una **tabla de porciones** por integrante.
+
+- **Adultos (≥ 18):** metabolismo basal Mifflin–St Jeor × nivel de actividad (1.2–1.9). El peso recomendado es el de IMC 22 (25.5 desde los 60). Ritmos suave / recomendado / rápido (0.25 / 0.5 / 1 % del peso por semana; subir: 0.25 / 0.5 / 0.75 %) con topes: déficit ≤ 25 %, ingesta ≥ 1200 (mujer) o 1500 (hombre) kcal y ≥ el metabolismo basal, superávit ≤ 500 kcal. El plazo se simula semana a semana recalculando el objetivo con el peso nuevo. Se usa el peso **tendencia** (promedio móvil exponencial), no el último pesaje suelto.
+- **Menores (< 18):** nunca hay metas de bajar de peso; las kcal cubren el crecimiento (ecuaciones del IOM, DRI 2005) y las administran los padres. No se calculan porciones para menores de 12 meses.
+- **Porciones:** las kcal del día se reparten por comida (3 comidas: 25 % desayuno, 40 % almuerzo, 35 % cena; con 4 o 5 se suman meriendas) y la porción de cada uno es su parte dividida entre las kcal de una porción de la receta, al ¼ más cercano (entre ¼ y 2). Si la familia necesita más o menos porciones que las que rinde la receta, se puede **ajustar** (`meals.portion_scale`): los ingredientes se muestran multiplicados y al completar la comida se descuenta del inventario lo ajustado.
+- **Privacidad:** cada persona ve lo suyo; los padres ven y editan los datos de los menores de 18 años de la familia (con o sin cuenta). Un adulto no ve el peso de otro. Las tablas nuevas solo se leen (RLS) y **toda escritura pasa por funciones SQL** que validan permisos y rangos. La tabla de porciones solo recibe kcal y porciones derivadas, nunca pesos ni metas.
+- **Límites:** las kcal de los alimentos son **aproximadas** (ver abajo); no hay modo embarazo/lactancia; solo unidades métricas (kg, cm). Es orientativo y no reemplaza a un nutricionista ni a un médico.
+
+Pruebas: `npm test` (fórmulas, porciones, datos de nutrición, traducciones) y `supabase/tests/body_rls.sql` (permisos; ver el encabezado del archivo, corre sobre una base desechable con migraciones y seed aplicados).
 
 ## Levantar en local
 
-Requiere Node 20+ y Docker Desktop (para Supabase local).
+Requiere Node 22.18+ (o 24; el generador del seed importa TypeScript) y Docker Desktop (para Supabase local).
 
 ```bash
 npm install
@@ -53,4 +67,5 @@ Las notificaciones push en iPhone requieren **iOS 16.4+**, **HTTPS** y la app **
 - **Otros productos de marca y códigos de barras:** [Open Food Facts](https://world.openfoodfacts.org) (datos abiertos, ODbL).
 - **Imágenes de alimentos genéricos:** [TheMealDB](https://www.themealdb.com).
 - **Vida útil estimada:** basada en USDA FoodKeeper.
+- **Calorías de los alimentos:** valores aproximados por 100 g (crudo o seco) en `supabase/data/nutrition.mjs`, escritos a mano a partir de [USDA FoodData Central](https://fdc.nal.usda.gov/) y las [Tablas Peruanas de Composición de Alimentos](https://repositorio.ins.gob.pe/items/7dd870ba-42db-449c-bef2-5d67d881383f) (INS/CENAN). Con una llave gratuita de [api.data.gov](https://api.data.gov/signup/), `USDA_API_KEY=… node scripts/verify-nutrition.mjs` los contrasta con USDA (solo es una ayuda: revisa a mano lo marcado). Las recetas cuentan el aceite de freír, el harina y la leche de apanados como lo que se consume, no lo que sobra en el sartén.
 - **Recetas:** resumidas con palabras propias; cada una enlaza a su receta original ([hora.es](https://www.hora.es/platos-peruanos-caseros/), [The Anthony Kitchen](https://www.theanthonykitchen.com/american-dinner-recipes/), BBC Good Food, Tasty).

@@ -60,7 +60,10 @@ export async function addInventoryItem(input: NewItem) {
   revalidatePath("/", "layout");
 }
 
-export type NewFood = { name: string; emoji?: string; default_unit: Unit; shelf_life_days?: number | null };
+/**
+ * `kcal` es opcional: por unidad si la unidad del alimento es "unid.", y por 100 g (o 100 ml) en los demás casos.
+ */
+export type NewFood = { name: string; emoji?: string; default_unit: Unit; shelf_life_days?: number | null; kcal?: number | null };
 
 /** Agrega varios alimentos de una vez (foto o boleta); los que no existen se crean como propios. */
 export async function addInventoryItems(items: (NewItem & { new_food?: NewFood | null })[]) {
@@ -108,6 +111,9 @@ export async function createCustomFood(input: NewFood) {
 async function insertCustomFood({ supabase, family, user }: Session, input: NewFood) {
   const name = input.name.trim().slice(0, 80);
   if (!name) throw new Error("invalid");
+  const unit = cleanUnit(input.default_unit);
+  const kcal = input.kcal == null ? null : Number(input.kcal);
+  if (kcal !== null && !(Number.isFinite(kcal) && kcal >= 0 && kcal <= 1000)) throw new Error("invalid");
   const { data, error } = await supabase
     .from("foods")
     .insert({
@@ -116,8 +122,11 @@ async function insertCustomFood({ supabase, family, user }: Session, input: NewF
       name_en: name,
       category: "custom",
       emoji: input.emoji?.slice(0, 8) || "🍽️",
-      default_unit: cleanUnit(input.default_unit),
+      default_unit: unit,
       shelf_life_days: input.shelf_life_days && input.shelf_life_days > 0 ? Math.round(input.shelf_life_days) : null,
+      // Por unidad: se guarda "1 unidad = 100 g" para que kcal_100g sea justo las kcal de una unidad.
+      kcal_100g: kcal,
+      g_per_unit: kcal !== null && unit === "unit" ? 100 : null,
       created_by: user.id,
     })
     .select()

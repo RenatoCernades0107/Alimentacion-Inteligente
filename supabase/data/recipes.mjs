@@ -2,6 +2,8 @@
 // `source` apunta a la receta de referencia.
 // Ingredientes: [foodKey, cantidad (en la unidad por defecto del alimento), opcional?]
 // meals: breakfast | lunch | dinner | snack
+// Aceite de freír, harina y leche de apanados: se anota lo que se consume/absorbe (no lo que sobra en el sartén
+// o el plato), para que las kcal por porción sean realistas.
 
 const PE_SRC = "https://www.hora.es/platos-peruanos-caseros/#";
 const US_SRC = "https://www.theanthonykitchen.com/";
@@ -44,7 +46,7 @@ export const recipes = [
     descEs: "Salteado de lomo, cebolla y tomate al wok con papas fritas y arroz.",
     descEn: "Wok-seared beef, onion and tomato with french fries and rice.",
     source: PE_SRC + "31-lomo-saltado",
-    ing: [["beef_sirloin", 0.6], ["red_onion", 2], ["tomato", 3], ["aji_amarillo", 1], ["soy_sauce", 50], ["vinegar", 20], ["garlic", 0.25], ["cilantro", 0.5], ["potato", 1], ["rice", 0.4], ["vegetable_oil", 0.2]],
+    ing: [["beef_sirloin", 0.6], ["red_onion", 2], ["tomato", 3], ["aji_amarillo", 1], ["soy_sauce", 50], ["vinegar", 20], ["garlic", 0.25], ["cilantro", 0.5], ["potato", 1], ["rice", 0.4], ["vegetable_oil", 0.05]],
     stepsEs: ["Corta el lomo en tiras y sazona con sal, pimienta y ajo.", "Fríe las papas en bastones y prepara el arroz.", "Saltea la carne a fuego muy alto; agrega cebolla, tomate y ají.", "Añade sillao y vinagre, termina con culantro y mezcla con las papas."],
     stepsEn: ["Cut the beef into strips and season with salt, pepper and garlic.", "Fry the potatoes as fries and cook the rice.", "Sear the beef over very high heat; add onion, tomato and chili.", "Add soy sauce and vinegar, finish with cilantro and toss with the fries."],
   },
@@ -134,7 +136,7 @@ export const recipes = [
     descEs: "Bistec con huevo frito, plátano frito, papas fritas y arroz.",
     descEn: "Steak with fried egg, fried plantain, fries and rice.",
     source: PE_SRC + "40-bistec-a-lo-pobre",
-    ing: [["beef_sirloin", 0.6], ["eggs", 4], ["plantain", 2], ["potato", 1], ["rice", 0.4], ["garlic", 0.25], ["vegetable_oil", 0.2]],
+    ing: [["beef_sirloin", 0.6], ["eggs", 4], ["plantain", 2], ["potato", 1], ["rice", 0.4], ["garlic", 0.25], ["vegetable_oil", 0.05]],
     stepsEs: ["Sazona y fríe los bistecs.", "Fríe papas, plátanos en rodajas y los huevos.", "Sirve todo junto con arroz blanco."],
     stepsEn: ["Season and pan-fry the steaks.", "Fry potatoes, sliced plantains and the eggs.", "Serve everything together with white rice."],
   },
@@ -234,7 +236,7 @@ export const recipes = [
     descEs: "Croquetas de papa rellenas de carne molida, fritas.",
     descEn: "Fried potato croquettes stuffed with ground beef.",
     source: PE_SRC + "9-papa-rellena",
-    ing: [["potato", 1], ["ground_beef", 0.4], ["onion", 1], ["garlic", 0.25], ["aji_panca_paste", 20], ["eggs", 2], ["flour", 0.05], ["vegetable_oil", 0.3], ["raisins", 30, true], ["olives", 40, true]],
+    ing: [["potato", 1], ["ground_beef", 0.4], ["onion", 1], ["garlic", 0.25], ["aji_panca_paste", 20], ["eggs", 2], ["flour", 0.05], ["vegetable_oil", 0.1], ["raisins", 30, true], ["olives", 40, true]],
     stepsEs: ["Sancocha y prensa las papas.", "Cocina la carne con cebolla, ajo y ají; añade huevo picado, pasas y aceitunas.", "Rellena porciones de papa y dales forma.", "Pasa por harina y fríe hasta dorar."],
     stepsEn: ["Boil and mash the potatoes.", "Cook the beef with onion, garlic and chili; add chopped egg, raisins and olives.", "Stuff portions of potato and shape them.", "Dredge in flour and fry until golden."],
   },
@@ -254,7 +256,7 @@ export const recipes = [
     descEs: "Pan con chicharrón de cerdo, camote frito y sarsa criolla.",
     descEn: "Bread roll with crispy pork, fried sweet potato and onion relish.",
     source: PE_SRC + "54-chicharron-de-cerdo",
-    ing: [["bread", 4], ["pork", 0.8], ["sweet_potato", 0.5], ["red_onion", 1], ["lime", 2], ["aji_amarillo", 1, true], ["vegetable_oil", 0.1]],
+    ing: [["bread", 4], ["pork", 0.8], ["sweet_potato", 0.5], ["red_onion", 1], ["lime", 2], ["aji_amarillo", 1, true], ["vegetable_oil", 0.05]],
     stepsEs: ["Hierve el cerdo en agua con sal hasta que se evapore y dórelo en su grasa.", "Fríe el camote en rodajas.", "Prepara la sarsa: cebolla en pluma, ají, limón y sal.", "Arma el pan con chicharrón, camote y sarsa."],
     stepsEn: ["Boil the pork in salted water until it evaporates, then crisp it in its fat.", "Fry sliced sweet potato.", "Make the relish: sliced onion, chili, lime and salt.", "Fill the roll with pork, sweet potato and relish."],
   },
@@ -376,7 +378,7 @@ export const recipes = [
     descEs: "Pollo marinado en leche y frito crocante.",
     descEn: "Chicken marinated in buttermilk and fried until crispy.",
     source: US_SRC + "buttermilk-fried-chicken/",
-    ing: [["chicken_thighs", 1.2], ["flour", 0.3], ["milk", 0.5], ["eggs", 2], ["paprika", 10], ["garlic_powder", 5], ["vegetable_oil", 1]],
+    ing: [["chicken_thighs", 1.2], ["flour", 0.15], ["milk", 0.25], ["eggs", 2], ["paprika", 10], ["garlic_powder", 5], ["vegetable_oil", 0.06]],
     stepsEs: ["Marina el pollo en leche con sal (mínimo 2 h).", "Pasa por huevo y harina sazonada con paprika y ajo.", "Fríe en aceite a 170 °C por 12–15 minutos."],
     stepsEn: ["Marinate the chicken in buttermilk and salt (2 h+).", "Dip in egg and flour seasoned with paprika and garlic.", "Fry at 340 °F for 12–15 minutes."],
   },

@@ -27,6 +27,7 @@ export async function materializeSeries(familyId: string, until: string) {
           slot: s.slot,
           recipe_id: s.recipe_id,
           title: s.title,
+          kcal_per_serving: s.kcal_per_serving ?? null,
           series_id: s.id,
           status: "planned",
         })),

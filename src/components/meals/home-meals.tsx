@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { MealActionsDrawer } from "@/components/meals/meal-actions";
 import { RecipeImage } from "@/components/recipe-image";
+import { KcalChip } from "@/components/meals/kcal-chip";
 import { parseDate } from "@/lib/dates";
 import { mealName, type Meal, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -29,9 +30,12 @@ export function HomeMeals({ meals, today, isParent, slots, showDate }: { meals: 
               <RecipeImage src={m.recipe?.image_url} emoji={m.recipe?.emoji} />
               <div className="min-w-0 flex-1">
                 <div className={cn("truncate font-medium", m.status === "completed" && "line-through opacity-60")}>{mealName(m, locale)}</div>
-                <div className="text-sm text-muted-foreground">
-                  {showDate && <span className="capitalize">{fmt.format(parseDate(m.date))} · </span>}
-                  {ts(m.slot)}
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <span className="truncate">
+                    {showDate && <span className="capitalize">{fmt.format(parseDate(m.date))} · </span>}
+                    {ts(m.slot)}
+                  </span>
+                  <KcalChip meal={m} />
                 </div>
               </div>
               {m.status === "proposed" && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs text-amber-900">{t("proposed")}</span>}

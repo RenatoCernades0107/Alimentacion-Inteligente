@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Check, Minus, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Check, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,9 +65,14 @@ function StockHint({ item, inventory }: { item: Pick<MealItem, "food_id" | "unit
   return <Check className="size-4 shrink-0 text-primary" aria-label={t("inStock")} />;
 }
 
-/** Lista compacta (solo lectura) para el drawer de acciones de la comida. */
-export function MealItemsSummary({ meal, canEdit, onEdit }: { meal: Meal; canEdit: boolean; onEdit: () => void }) {
+/**
+ * Lista compacta (solo lectura) para el drawer de acciones de la comida.
+ * `scale` es el multiplicador de porciones a cocinar: las cantidades guardadas son las de la receta y aquí se
+ * muestran ya multiplicadas, que es lo que se usa y lo que se descuenta del inventario.
+ */
+export function MealItemsSummary({ meal, canEdit, onEdit, scale = 1 }: { meal: Meal; canEdit: boolean; onEdit: () => void; scale?: number }) {
   const t = useTranslations("mealItems");
+  const tp = useTranslations("portions");
   const tu = useTranslations("units");
   const tc = useTranslations("common");
   const locale = useLocale();
@@ -80,7 +85,10 @@ export function MealItemsSummary({ meal, canEdit, onEdit }: { meal: Meal; canEdi
     <section className="rounded-2xl border bg-card">
       <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">{t("title")}</h3>
+          <h3 className="text-sm font-semibold">
+            {t("title")}
+            {scale !== 1 && <span className="ml-1.5 font-normal text-primary">{tp("cooking", { scale: formatQuantity(+scale.toFixed(2)) })}</span>}
+          </h3>
           {data && data.source !== "recipe" && data.source !== "none" && meal.status !== "completed" && (
             <p className="text-xs text-muted-foreground">{data.source === "series" ? t("editedSeries") : t("edited")}</p>
           )}
@@ -105,9 +113,11 @@ export function MealItemsSummary({ meal, canEdit, onEdit }: { meal: Meal; canEdi
                 {it.optional && <span className="ml-1 text-xs text-muted-foreground">({t("optional")})</span>}
               </span>
               <span className="shrink-0 text-sm text-muted-foreground">
-                {it.quantity && it.unit ? `${formatQuantity(it.quantity)} ${tu(it.unit)}` : t("toTaste")}
+                {it.quantity && it.unit ? `${formatQuantity(+(it.quantity * scale).toFixed(3))} ${tu(it.unit)}` : t("toTaste")}
               </span>
-              {meal.status !== "completed" && <StockHint item={it} inventory={data.inventory} />}
+              {meal.status !== "completed" && (
+                <StockHint item={{ ...it, quantity: it.quantity ? it.quantity * scale : it.quantity }} inventory={data.inventory} />
+              )}
             </li>
           ))}
         </ul>
@@ -169,15 +179,6 @@ function Editor({ meal, initial, onClose }: { meal: Meal; initial: Loaded; onClo
   const update = (foodId: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.food_id === foodId ? { ...r, ...patch } : r)));
   const remove = (foodId: string) => setRows((rs) => rs.filter((r) => r.food_id !== foodId));
 
-  function scale(factor: number) {
-    setRows((rs) =>
-      rs.map((r) => {
-        const q = Number(r.quantity);
-        return r.quantity && q > 0 ? { ...r, quantity: String(+(q * factor).toFixed(2)) } : r;
-      }),
-    );
-  }
-
   function add(food: Food) {
     if (rows.some((r) => r.food_id === food.id)) {
       toast(t("alreadyAdded", { name: localName(food, locale) }));
@@ -216,18 +217,6 @@ function Editor({ meal, initial, onClose }: { meal: Meal; initial: Loaded; onClo
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
       <p className="text-sm text-muted-foreground">{t("hint")}</p>
-
-      {rows.some((r) => r.quantity) && (
-        <div className="flex items-center gap-2">
-          <span className="flex-1 text-sm font-medium">{t("portions")}</span>
-          <Button type="button" variant="outline" size="sm" onClick={() => scale(0.5)} aria-label={t("halve")}>
-            <Minus /> ½
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => scale(2)} aria-label={t("double")}>
-            <Plus /> 2×
-          </Button>
-        </div>
-      )}
 
       <ul className="min-h-0 flex-1 divide-y overflow-y-auto rounded-xl border">
         {rows.length === 0 && <li className="p-4 text-center text-sm text-muted-foreground">{t("emptyEditor")}</li>}

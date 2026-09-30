@@ -1,3 +1,5 @@
+import type { Activity, Pace, Sex } from "./body";
+
 export type Role = "parent" | "child";
 export type Unit = "unit" | "g" | "kg" | "ml" | "l";
 export type MealSlot = "breakfast" | "morning_snack" | "lunch" | "afternoon_snack" | "dinner";
@@ -34,6 +36,12 @@ export type Food = {
   image_url: string | null;
   shelf_life_days: number | null;
   default_unit: Unit;
+  /** kcal por 100 g del alimento (crudo o seco); null = sin dato. */
+  kcal_100g: number | null;
+  /** Gramos de "1 unidad". */
+  g_per_unit: number | null;
+  /** Gramos por ml (densidad). */
+  g_per_ml: number;
 };
 
 export type InventoryItem = {
@@ -76,6 +84,10 @@ export type Recipe = {
   source_url: string | null;
   steps_es: string[];
   steps_en: string[];
+  /** kcal por porción con los ingredientes obligatorios (precalculado en el seed). */
+  kcal_per_serving: number | null;
+  /** false si a algún ingrediente obligatorio le falta el dato de kcal. */
+  kcal_complete: boolean;
   recipe_ingredients?: RecipeIngredient[];
 };
 
@@ -91,7 +103,13 @@ export type Meal = {
   status: MealStatus;
   proposed_by: string | null;
   completed_at: string | null;
-  recipe?: Pick<Recipe, "id" | "slug" | "name_es" | "name_en" | "emoji" | "image_url"> | null;
+  /** Ingredientes editados para esta comida (ya no son los de la receta). */
+  custom_items: boolean;
+  /** Multiplicador de los ingredientes de una comida con receta (1 = como rinde la receta). */
+  portion_scale: number;
+  /** kcal por porción ingresadas a mano (comidas sin receta). */
+  kcal_per_serving: number | null;
+  recipe?: Pick<Recipe, "id" | "slug" | "name_es" | "name_en" | "emoji" | "image_url" | "servings" | "kcal_per_serving" | "kcal_complete"> | null;
   series?: { recurrence: Recurrence } | null;
   proposer?: { full_name: string | null } | null;
 };
@@ -106,6 +124,38 @@ export type MealSeries = {
   start_date: string;
   end_date: string | null;
   materialized_until: string;
+  custom_items?: boolean;
+  kcal_per_serving?: number | null;
+};
+
+/** Integrante sin cuenta (bebé, niño), administrado por los padres. */
+export type Dependent = {
+  id: string;
+  family_id: string;
+  name: string;
+  avatar: string | null;
+};
+
+/** Datos corporales de una persona (cuenta o dependiente). Privados: ver supabase/migrations. */
+export type BodyRow = {
+  id: string;
+  profile_id: string | null;
+  dependent_id: string | null;
+  sex: Sex | null;
+  birth_date: string | null;
+  height_cm: number | null;
+  activity: Activity;
+  goal_weight_kg: number | null;
+  goal_pace: Pace;
+  goal_set_on: string | null;
+};
+
+export type WeightLog = {
+  id: string;
+  body_id: string;
+  logged_on: string;
+  weight_kg: number;
+  height_cm: number | null;
 };
 
 /** Nombre localizado de un registro con name_es / name_en. */

@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { MealDrawer, type MealDraft, type RecipeOption } from "@/components/meals/meal-drawer";
 import { MealActionsDrawer } from "@/components/meals/meal-actions";
 import { RecipeImage } from "@/components/recipe-image";
+import { KcalChip } from "@/components/meals/kcal-chip";
 import { addDays, parseDate } from "@/lib/dates";
 import { mealName, type Meal, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -223,6 +224,7 @@ export function CalendarView({
                           <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                             {m.status === "proposed" && <span className="rounded-full bg-amber-200 px-2 py-0.5 font-medium text-amber-900">{t("proposed")}</span>}
                             {m.status === "completed" && <span className="font-medium text-primary">{t("completed")}</span>}
+                            <KcalChip meal={m} />
                             {m.series_id && (
                               <span className="inline-flex items-center gap-1">
                                 <Repeat className="size-3" /> {t("repeats")}
@@ -251,7 +253,7 @@ export function CalendarView({
         onClose={() => setSelected(null)}
         onEdit={(m) => {
           setSelected(null);
-          setDraft({ id: m.id, seriesId: m.series_id, date: m.date, slot: m.slot, recipeId: m.recipe_id, title: m.title, recurrence: m.series?.recurrence ?? null });
+          setDraft({ id: m.id, seriesId: m.series_id, date: m.date, slot: m.slot, recipeId: m.recipe_id, title: m.title, recurrence: m.series?.recurrence ?? null, kcalPerServing: m.kcal_per_serving });
         }}
       />
     </>

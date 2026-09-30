@@ -19,6 +19,8 @@ export type MealInput = {
   recipe_id?: string | null;
   title?: string | null;
   recurrence?: Recurrence | null;
+  /** kcal por porción ingresadas a mano; solo para comidas sin receta. */
+  kcal_per_serving?: number | null;
 };
 
 export type Scope = "one" | "series";
@@ -28,18 +30,21 @@ function validate(input: MealInput) {
   const title = input.title?.trim().slice(0, 80) || null;
   if (!input.recipe_id && !title) throw new Error("invalid");
   if (input.recurrence && !RECURRENCES.includes(input.recurrence)) throw new Error("invalid");
-  return { recipe_id: input.recipe_id || null, title: input.recipe_id ? null : title };
+  const kcal = input.kcal_per_serving == null ? null : Math.round(Number(input.kcal_per_serving));
+  if (kcal !== null && !(Number.isFinite(kcal) && kcal >= 1 && kcal <= 3000)) throw new Error("invalid");
+  // Con receta las kcal salen de sus ingredientes; la manual solo aplica a comidas sin receta.
+  return { recipe_id: input.recipe_id || null, title: input.recipe_id ? null : title, kcal_per_serving: input.recipe_id ? null : kcal };
 }
 
 /** Padres: agrega una comida (única o recurrente). Hijos: la proponen. */
 export async function addMeal(input: MealInput) {
   const session = await requireMember();
   const { supabase, family, user, isParent } = session;
-  const { recipe_id, title } = validate(input);
+  const { recipe_id, title, kcal_per_serving } = validate(input);
 
   if (!isParent) {
     const { error } = await supabase.from("meals").insert({
-      family_id: family.id, date: input.date, slot: input.slot, recipe_id, title,
+      family_id: family.id, date: input.date, slot: input.slot, recipe_id, title, kcal_per_serving,
       status: "proposed", proposed_by: user.id,
     });
     if (error) throw new Error(error.message);
@@ -51,14 +56,14 @@ export async function addMeal(input: MealInput) {
     }, { role: "parent" });
   } else if (input.recurrence) {
     const { data: series, error } = await supabase.from("meal_series").insert({
-      family_id: family.id, recipe_id, title, slot: input.slot, recurrence: input.recurrence,
+      family_id: family.id, recipe_id, title, kcal_per_serving, slot: input.slot, recurrence: input.recurrence,
       start_date: input.date, materialized_until: addDays(input.date, -1), created_by: user.id,
     }).select().single();
     if (error || !series) throw new Error(error?.message ?? "error");
     await materializeSeries(family.id, addDays(todayIn(family.timezone), MATERIALIZE_DAYS));
   } else {
     const { error } = await supabase.from("meals").insert({
-      family_id: family.id, date: input.date, slot: input.slot, recipe_id, title, status: "planned",
+      family_id: family.id, date: input.date, slot: input.slot, recipe_id, title, kcal_per_serving, status: "planned",
     });
     if (error) throw new Error(error.message);
   }
@@ -68,7 +73,7 @@ export async function addMeal(input: MealInput) {
 /** Edita una comida o toda su recurrencia (desde hoy en adelante). */
 export async function updateMeal(id: string, input: MealInput, scope: Scope) {
   const { supabase, family } = await requireParent();
-  const { recipe_id, title } = validate(input);
+  const { recipe_id, title, kcal_per_serving } = validate(input);
   const { data: meal } = await supabase.from("meals").select("*").eq("id", id).single();
   if (!meal) throw new Error("not found");
 
@@ -86,7 +91,7 @@ export async function updateMeal(id: string, input: MealInput, scope: Scope) {
     const recipeChanged = recipe_id !== series.recipe_id;
     if (recipeChanged) await supabase.from("meal_items").delete().eq("series_id", series.id);
     await supabase.from("meal_series").update({
-      recipe_id, title, slot: input.slot, recurrence, materialized_until: addDays(from, -1),
+      recipe_id, title, kcal_per_serving, slot: input.slot, recurrence, materialized_until: addDays(from, -1),
       ...(recipeChanged ? { custom_items: false } : {}),
     }).eq("id", series.id);
     await materializeSeries(family.id, addDays(today, MATERIALIZE_DAYS));
@@ -95,8 +100,10 @@ export async function updateMeal(id: string, input: MealInput, scope: Scope) {
     const recipeChanged = recipe_id !== meal.recipe_id && meal.custom_items;
     if (recipeChanged) await supabase.from("meal_items").delete().eq("meal_id", id);
     const { error } = await supabase.from("meals").update({
-      date: input.date, slot: input.slot, recipe_id, title, is_exception: !!meal.series_id,
+      date: input.date, slot: input.slot, recipe_id, title, kcal_per_serving, is_exception: !!meal.series_id,
       ...(recipeChanged ? { custom_items: false } : {}),
+      // Otra receta: la escala de porciones de la anterior ya no aplica.
+      ...(recipe_id !== meal.recipe_id ? { portion_scale: 1 } : {}),
     }).eq("id", id);
     if (error) throw new Error(error.message);
   }
@@ -128,6 +135,22 @@ export async function reviewProposal(id: string, accept: boolean) {
   const { error } = accept
     ? await supabase.from("meals").update({ status: "planned" }).eq("id", id).eq("status", "proposed")
     : await supabase.from("meals").delete().eq("id", id).eq("status", "proposed");
+  if (error) throw new Error(error.message);
+  revalidatePath("/", "layout");
+}
+
+/**
+ * Cuántas porciones se cocinan: multiplicador de los ingredientes de una comida con receta
+ * (1 = como rinde la receta). Solo escala lo que se descuenta del inventario al completarla; las
+ * cantidades guardadas siguen siendo las de la receta. Solo padres y solo comidas pendientes.
+ */
+export async function setPortionScale(id: string, scale: number) {
+  const { supabase } = await requireParent();
+  const value = Math.round(Number(scale) * 100) / 100;
+  if (!UUID.test(id) || !Number.isFinite(value) || value < 0.25 || value > 20) throw new Error("invalid");
+  const { data: meal } = await supabase.from("meals").select("id, recipe_id, status").eq("id", id).single();
+  if (!meal || !meal.recipe_id || meal.status === "completed" || meal.status === "cancelled") throw new Error("invalid");
+  const { error } = await supabase.from("meals").update({ portion_scale: value }).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/", "layout");
 }
@@ -211,6 +234,9 @@ export async function completeMeal(id: string, locale: string): Promise<Completi
 
   const report: CompletionReport = { used: [], missing: [], short: [] };
   const { source, items: ingredients } = await loadMealItems(supabase, id);
+  // Las cantidades guardadas son para las porciones de la receta; se descuenta lo que se cocinó.
+  // La escala se lee de la fila de la comida, nunca de un argumento del cliente.
+  const scale = meal.recipe_id ? Number(meal.portion_scale) || 1 : 1;
 
   if (ingredients.length) {
     const { data: items } = await supabase
@@ -231,7 +257,8 @@ export async function completeMeal(id: string, locale: string): Promise<Completi
       if (!ing.quantity || !ing.unit) continue;
 
       // Descuenta primero de lo que vence antes, sin pasar de lo que hay.
-      let remaining = ing.quantity;
+      const amount = ing.quantity * scale;
+      let remaining = amount;
       for (const item of stock) {
         if (remaining <= 1e-9) break;
         const needed = convert(remaining, ing.unit, item.unit);
@@ -244,7 +271,7 @@ export async function completeMeal(id: string, locale: string): Promise<Completi
         else await supabase.from("inventory_items").update({ quantity: item.quantity, updated_at: new Date().toISOString() }).eq("id", item.id);
       }
       remaining = Math.max(0, remaining);
-      const used = ing.quantity - remaining;
+      const used = amount - remaining;
       if (used > 1e-9) report.used.push({ name, amount: `${formatQuantity(+used.toFixed(2))} ${ing.unit}` });
       // No alcanzó (o estaba en una unidad no convertible).
       if (remaining > 1e-6 && !ing.optional) (used > 1e-9 ? report.short : report.missing).push(name);

@@ -9,8 +9,9 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/u
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ScopeDialog } from "@/components/meals/scope-dialog";
 import { MealItemsDrawer, MealItemsSummary } from "@/components/meals/meal-items";
+import { PortionTable } from "@/components/meals/portion-table";
 import { RecipeImage } from "@/components/recipe-image";
-import { completeMeal, deleteMeal, reviewProposal, type Scope } from "@/app/actions/meals";
+import { completeMeal, deleteMeal, reviewProposal, setPortionScale, type Scope } from "@/app/actions/meals";
 import { mealName, type Meal } from "@/lib/types";
 
 export function MealActionsDrawer({
@@ -62,9 +63,28 @@ function MealActions({
   const ts = useTranslations("slots");
   const tr = useTranslations("recurrence");
   const tc = useTranslations("common");
+  const tp = useTranslations("portions");
   const locale = useLocale();
   const [pending, start] = useTransition();
+  const [scaling, startScaling] = useTransition();
   const [askScope, setAskScope] = useState(false);
+  // Porciones a cocinar (multiplicador de los ingredientes). Se guarda al cambiarlo; aquí es la fuente de verdad.
+  const [scale, setScale] = useState(Number(meal.portion_scale) || 1);
+  const canScale = isParent && !!meal.recipe_id && (meal.status === "planned" || meal.status === "proposed");
+
+  function changeScale(next: number) {
+    const previous = scale;
+    setScale(next);
+    startScaling(async () => {
+      try {
+        await setPortionScale(meal.id, next);
+        toast.success(tp("scaleSaved"));
+      } catch {
+        setScale(previous);
+        toast.error(tc("error"));
+      }
+    });
+  }
 
   const run = (fn: () => Promise<unknown>, success?: string) =>
     start(async () => {
@@ -115,10 +135,15 @@ function MealActions({
 
       <div className="flex min-h-0 flex-col gap-2 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         {meal.status !== "cancelled" && (
+          <PortionTable mealId={meal.id} scale={scale} canAdjust={canScale} onScale={changeScale} busy={scaling} />
+        )}
+
+        {meal.status !== "cancelled" && (
           <MealItemsSummary
             meal={meal}
             canEdit={isParent && (meal.status === "planned" || meal.status === "proposed")}
             onEdit={() => onEditItems(meal)}
+            scale={scale}
           />
         )}
 

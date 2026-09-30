@@ -8,13 +8,13 @@ export type MealItem = {
   quantity: number | null;
   unit: Unit | null;
   optional: boolean;
-  food: Pick<Food, "id" | "name_es" | "name_en" | "emoji" | "image_url" | "default_unit" | "category">;
+  food: Pick<Food, "id" | "name_es" | "name_en" | "emoji" | "image_url" | "default_unit" | "category" | "kcal_100g" | "g_per_unit" | "g_per_ml">;
 };
 
 /** De dónde salen los ingredientes: la receta, la comida editada o la recurrencia editada. */
 export type MealItemsSource = "recipe" | "meal" | "series" | "none";
 
-const FOOD_COLS = "food:foods(id, name_es, name_en, emoji, image_url, default_unit, category)";
+const FOOD_COLS = "food:foods(id, name_es, name_en, emoji, image_url, default_unit, category, kcal_100g, g_per_unit, g_per_ml)";
 const ITEM_COLS = `food_id, quantity, unit, optional, ${FOOD_COLS}`;
 
 type MealRow = {

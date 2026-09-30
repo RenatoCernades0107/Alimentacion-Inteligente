@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Scale } from "lucide-react";
 import { requireMember } from "@/lib/session";
 import { materializeSeries } from "@/lib/calendar";
 import { addDays, todayIn } from "@/lib/dates";
@@ -20,13 +20,14 @@ import { itemName, localName, type InventoryItem, type Meal } from "@/lib/types"
 export default async function HomePage() {
   const { supabase, family, profile, isParent } = await requireMember();
   const t = await getTranslations("home");
+  const tw = await getTranslations("weight");
   const locale = await getLocale();
   const today = todayIn(family.timezone);
 
   await materializeSeries(family.id, addDays(today, 14));
 
-  const mealSelect = "*, recipe:recipes(id, slug, name_es, name_en, emoji, image_url), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)";
-  const [{ data: todayMeals }, { data: proposals }, { data: pending }, { data: expiring }, { recipes, inventory }] = await Promise.all([
+  const mealSelect = "*, recipe:recipes(id, slug, name_es, name_en, emoji, image_url, servings, kcal_per_serving, kcal_complete), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)";
+  const [{ data: todayMeals }, { data: proposals }, { data: pending }, { data: expiring }, { recipes, inventory }, { data: myBody }] = await Promise.all([
     supabase.from("meals").select(mealSelect).eq("family_id", family.id).eq("date", today).neq("status", "cancelled"),
     isParent
       ? supabase.from("meals").select(mealSelect).eq("family_id", family.id).eq("status", "proposed").gte("date", today).order("date")
@@ -36,7 +37,15 @@ export default async function HomePage() {
       : Promise.resolve({ data: [] }),
     supabase.from("inventory_items").select("*, food:foods(*)").eq("family_id", family.id).not("expires_on", "is", null).lte("expires_on", addDays(today, 7)).order("expires_on"),
     loadRecipesAndInventory(supabase, family.id),
+    // Datos corporales propios (RLS): para invitar a completarlos.
+    isParent
+      ? supabase.from("body_profiles").select("id, sex, birth_date, height_cm").eq("profile_id", profile.id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const { count: myLogs } = myBody
+    ? await supabase.from("weight_logs").select("id", { count: "exact", head: true }).eq("body_id", myBody.id)
+    : { count: 0 };
+  const needsBody = isParent && (!myBody || !myBody.sex || !myBody.birth_date || !myBody.height_cm || !myLogs);
 
   const slots = slotsFor(family.meals_per_day);
   const suggestions = (todayMeals ?? []).length === 0
@@ -47,7 +56,7 @@ export default async function HomePage() {
   return (
     <>
       <header className="flex items-center gap-3 pt-4 pb-1">
-        <Link href="/family" aria-label={t("profile")} className="shrink-0 rounded-full">
+        <Link href="/weight" aria-label={t("profile")} className="shrink-0 rounded-full">
           <MemberAvatar member={profile} className="size-12" />
         </Link>
         <div className="min-w-0">
@@ -57,6 +66,19 @@ export default async function HomePage() {
       </header>
 
       <PushCard compact />
+
+      {needsBody && (
+        <Link href="/weight" className="mt-3 flex items-center gap-3 rounded-2xl border bg-card p-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Scale className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-medium">{tw("cardTitle")}</span>
+            <span className="block text-sm text-muted-foreground">{tw("cardBody")}</span>
+          </span>
+          <span className="shrink-0 text-sm font-medium text-primary">{tw("cardAction")} →</span>
+        </Link>
+      )}
 
       {(proposals ?? []).length > 0 && (
         <Section title={t("proposals")}>

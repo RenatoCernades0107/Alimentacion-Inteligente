@@ -1,4 +1,4 @@
-import type { MealSlot, MealSeries, Recurrence } from "./types";
+import type { Meal, MealSlot, MealSeries, Recurrence } from "./types";
 import { addDays, parseDate, formatISO } from "./dates";
 
 export const RECURRENCES: Recurrence[] = ["daily", "weekdays", "weekly", "biweekly", "monthly"];
@@ -9,6 +9,19 @@ export function slotsFor(mealsPerDay: number): MealSlot[] {
   if (mealsPerDay >= 5) return ALL_SLOTS;
   if (mealsPerDay === 4) return ["breakfast", "morning_snack", "lunch", "dinner"];
   return ["breakfast", "lunch", "dinner"];
+}
+
+/**
+ * kcal por porción de una comida para mostrar en tarjetas. `approx` si puede no ser exacta: falta el dato
+ * de algún ingrediente, o los ingredientes se editaron (el valor de la receta ya no aplica del todo).
+ */
+export function mealKcal(meal: Pick<Meal, "recipe" | "custom_items" | "kcal_per_serving" | "status">): { kcal: number; approx: boolean } | null {
+  if (meal.recipe) {
+    const kcal = meal.recipe.kcal_per_serving;
+    if (!kcal || kcal <= 0) return null;
+    return { kcal, approx: !meal.recipe.kcal_complete || (meal.custom_items && meal.status !== "completed") };
+  }
+  return meal.kcal_per_serving ? { kcal: meal.kcal_per_serving, approx: false } : null;
 }
 
 /** Tipo de receta que corresponde a cada franja. */

@@ -26,6 +26,8 @@ export type MealDraft = {
   recipeId?: string | null;
   title?: string | null;
   recurrence?: Recurrence | null;
+  /** kcal por porción ingresadas a mano (comidas sin receta). */
+  kcalPerServing?: number | null;
 };
 
 export function MealDrawer({
@@ -59,6 +61,7 @@ function MealForm({
   const ts = useTranslations("slots");
   const tr = useTranslations("recurrence");
   const tc = useTranslations("common");
+  const tp = useTranslations("portions");
   const locale = useLocale();
   const [pending, start] = useTransition();
 
@@ -67,6 +70,7 @@ function MealForm({
   const [recipeId, setRecipeId] = useState<string | null>(draft.recipeId ?? null);
   const [title, setTitle] = useState(draft.title ?? "");
   const [recurrence, setRecurrence] = useState<Recurrence | "">(draft.recurrence ?? "");
+  const [kcal, setKcal] = useState(draft.kcalPerServing ? String(draft.kcalPerServing) : "");
   const [query, setQuery] = useState("");
   const [askScope, setAskScope] = useState(false);
 
@@ -81,7 +85,8 @@ function MealForm({
     .slice(0, 30);
 
   function save(scope: Scope = "one") {
-    const input = { date, slot, recipe_id: recipeId, title: recipeId ? null : title, recurrence: recurrence || null };
+    const kcalValue = !recipeId && isParent && kcal.trim() ? Number(kcal.replace(",", ".")) : null;
+    const input = { date, slot, recipe_id: recipeId, title: recipeId ? null : title, recurrence: recurrence || null, kcal_per_serving: kcalValue };
     start(async () => {
       try {
         if (isEdit) await updateMeal(draft.id!, input, scope);
@@ -164,6 +169,13 @@ function MealForm({
                 <Label htmlFor="mtitle">{t("customTitle")}</Label>
                 <Input id="mtitle" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("customTitlePlaceholder")} maxLength={80} className="h-10" />
               </div>
+              {isParent && title.trim() && (
+                <div className="space-y-2">
+                  <Label htmlFor="mkcal">{tp("kcalManual")}</Label>
+                  <Input id="mkcal" type="number" inputMode="numeric" min={1} max={3000} step={1} value={kcal} onChange={(e) => setKcal(e.target.value)} className="h-10" />
+                  <p className="text-xs text-muted-foreground">{tp("kcalManualHint")}</p>
+                </div>
+              )}
             </>
           )}
         </div>

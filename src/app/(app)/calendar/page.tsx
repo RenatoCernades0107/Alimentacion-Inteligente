@@ -23,7 +23,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
   const [{ data: meals }, { data: recipes }, { data: nearby }] = await Promise.all([
     supabase
       .from("meals")
-      .select("*, recipe:recipes(id, slug, name_es, name_en, emoji, image_url), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)")
+      .select("*, recipe:recipes(id, slug, name_es, name_en, emoji, image_url, servings, kcal_per_serving, kcal_complete), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)")
       .eq("family_id", family.id)
       .gte("date", weekStart)
       .lte("date", weekEnd)

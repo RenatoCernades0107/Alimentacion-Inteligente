@@ -287,12 +287,15 @@ function CustomStep({ initialName, onCreated }: { initialName: string; onCreated
   const [emoji, setEmoji] = useState("🍽️");
   const [unit, setUnit] = useState<Unit>("unit");
   const [days, setDays] = useState("");
+  const [kcal, setKcal] = useState("");
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     start(async () => {
       try {
-        const food = await createCustomFood({ name, emoji, default_unit: unit, shelf_life_days: days ? Number(days) : null });
+        const food = await createCustomFood({
+          name, emoji, default_unit: unit, shelf_life_days: days ? Number(days) : null, kcal: kcal.trim() ? Number(kcal.replace(",", ".")) : null,
+        });
         toast.success(t("created"));
         onCreated(food as Food);
       } catch {
@@ -324,6 +327,11 @@ function CustomStep({ initialName, onCreated }: { initialName: string; onCreated
           <Label htmlFor="cdays">{t("shelfLife")}</Label>
           <Input id="cdays" type="number" inputMode="numeric" min={1} value={days} onChange={(e) => setDays(e.target.value)} className="h-10" />
         </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="ckcal">{unit === "unit" ? t("kcalPerUnit") : t("kcalPer100", { unit: unit === "ml" || unit === "l" ? "ml" : "g" })}</Label>
+        <Input id="ckcal" type="number" inputMode="decimal" min={0} max={1000} step="any" value={kcal} onChange={(e) => setKcal(e.target.value)} className="h-10" />
+        <p className="text-xs text-muted-foreground">{t("kcalHint")}</p>
       </div>
       <Button type="submit" size="lg" className="h-11 w-full" disabled={pending || !name.trim()}>{tc("save")}</Button>
     </form>

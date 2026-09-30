@@ -1,8 +1,10 @@
 // Genera supabase/seed.sql a partir de supabase/data/*.mjs
-// Uso: node scripts/build-seed.mjs
+// Uso: node scripts/build-seed.mjs   (Node 22.18+ / 24: importa src/lib/nutrition.ts quitando los tipos)
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { foods } from "../supabase/data/foods.mjs";
 import { recipes } from "../supabase/data/recipes.mjs";
+import { nutrition } from "../supabase/data/nutrition.mjs";
+import { kcalPerServing } from "../src/lib/nutrition.ts";
 
 const q = (v) => (v === null || v === undefined ? "null" : `'${String(v).replaceAll("'", "''")}'`);
 const arr = (a) => `array[${a.map(q).join(", ")}]::text[]`;
@@ -12,25 +14,44 @@ const img = (name) => (name ? `https://www.themealdb.com/images/ingredients/${en
 const foodByKey = new Map(foods.map((f) => [f[0], f]));
 const errors = [];
 
+// Nutrición del alimento: [kcal por 100 g, gramos por unidad, gramos por ml]. Los alimentos que usan
+// las recetas deben tenerla (si no, las kcal de la receta quedarían incompletas).
+const nutritionOf = (key) => {
+  const n = nutrition[key];
+  return { kcal_100g: n?.[0] ?? null, g_per_unit: n?.[1] ?? null, g_per_ml: n?.[2] ?? null };
+};
+const num = (v) => (v === null || v === undefined ? "null" : String(v));
+
 let sql = "-- Generado por scripts/build-seed.mjs. No editar a mano.\n\n";
 
-sql += "insert into foods (key, name_es, name_en, category, emoji, image_url, shelf_life_days, default_unit, aliases) values\n";
+sql += "insert into foods (key, name_es, name_en, category, emoji, image_url, shelf_life_days, default_unit, aliases, kcal_100g, g_per_unit, g_per_ml) values\n";
 sql += foods
-  .map(([key, es, en, cat, emoji, mealdb, days, unit, aliases]) =>
-    `  (${q(key)}, ${q(es)}, ${q(en)}, ${q(cat)}, ${q(emoji)}, ${q(img(mealdb))}, ${days}, ${q(unit)}, ${arr(aliases)})`)
+  .map(([key, es, en, cat, emoji, mealdb, days, unit, aliases]) => {
+    const n = nutritionOf(key);
+    return `  (${q(key)}, ${q(es)}, ${q(en)}, ${q(cat)}, ${q(emoji)}, ${q(img(mealdb))}, ${days}, ${q(unit)}, ${arr(aliases)}, ${num(n.kcal_100g)}, ${num(n.g_per_unit)}, ${num(n.g_per_ml ?? 1)})`;
+  })
   .join(",\n");
 sql += "\non conflict (key) do update set name_es = excluded.name_es, name_en = excluded.name_en, category = excluded.category,\n";
 sql += "  emoji = excluded.emoji, image_url = excluded.image_url, shelf_life_days = excluded.shelf_life_days,\n";
-sql += "  default_unit = excluded.default_unit, aliases = excluded.aliases;\n\n";
+sql += "  default_unit = excluded.default_unit, aliases = excluded.aliases,\n";
+sql += "  kcal_100g = excluded.kcal_100g, g_per_unit = excluded.g_per_unit, g_per_ml = excluded.g_per_ml;\n\n";
 
 for (const r of recipes) {
-  sql += `insert into recipes (slug, country, name_es, name_en, description_es, description_en, emoji, image_url, meal_types, servings, time_minutes, source_url, steps_es, steps_en) values (\n`;
+  // kcal por porción: suma de los ingredientes obligatorios (en la unidad por defecto de cada alimento).
+  const kcal = kcalPerServing(
+    r.ing.map(([key, qty, opt]) => ({ quantity: qty, unit: foodByKey.get(key)?.[7] ?? null, optional: !!opt, food: nutritionOf(key) })),
+    r.servings,
+  );
+  if (!kcal.complete) errors.push(`${r.slug}: falta la nutrición de algún ingrediente obligatorio`);
+
+  sql += `insert into recipes (slug, country, name_es, name_en, description_es, description_en, emoji, image_url, meal_types, servings, time_minutes, source_url, steps_es, steps_en, kcal_per_serving, kcal_complete) values (\n`;
   sql += `  ${q(r.slug)}, ${q(r.country)}, ${q(r.es)}, ${q(r.en)}, ${q(r.descEs)}, ${q(r.descEn)}, ${q(r.emoji)}, ${q(recipeImg(r.slug))}, ${arr(r.meals)}, ${r.servings}, ${r.time ?? "null"}, ${q(r.source)},\n`;
-  sql += `  ${arr(r.stepsEs)}, ${arr(r.stepsEn)})\n`;
+  sql += `  ${arr(r.stepsEs)}, ${arr(r.stepsEn)}, ${kcal.kcal}, ${kcal.complete})\n`;
   sql += "on conflict (slug) do update set country = excluded.country, name_es = excluded.name_es, name_en = excluded.name_en,\n";
   sql += "  description_es = excluded.description_es, description_en = excluded.description_en, emoji = excluded.emoji, image_url = excluded.image_url,\n";
   sql += "  meal_types = excluded.meal_types, servings = excluded.servings, time_minutes = excluded.time_minutes,\n";
-  sql += "  source_url = excluded.source_url, steps_es = excluded.steps_es, steps_en = excluded.steps_en;\n";
+  sql += "  source_url = excluded.source_url, steps_es = excluded.steps_es, steps_en = excluded.steps_en,\n";
+  sql += "  kcal_per_serving = excluded.kcal_per_serving, kcal_complete = excluded.kcal_complete;\n";
   sql += `delete from recipe_ingredients where recipe_id = (select id from recipes where slug = ${q(r.slug)});\n`;
   sql += "insert into recipe_ingredients (recipe_id, food_id, quantity, unit, optional)\n";
   sql += "select r.id, f.id, v.qty, f.default_unit, v.opt from (values\n";

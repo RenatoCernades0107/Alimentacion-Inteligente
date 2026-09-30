@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ArrowLeft, Check, Clock, ExternalLink, Users } from "lucide-react";
+import { ArrowLeft, Check, Clock, ExternalLink, Flame, Users } from "lucide-react";
 import { requireMember } from "@/lib/session";
 import { todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
@@ -58,6 +58,9 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
           <span>{recipe.country === "PE" ? "🇵🇪" : "🇺🇸"} {tc(recipe.country)}</span>
           {recipe.time_minutes && <span className="inline-flex items-center gap-1"><Clock className="size-4" /> {t("minutes", { count: recipe.time_minutes })}</span>}
           <span className="inline-flex items-center gap-1"><Users className="size-4" /> {t("servings", { count: recipe.servings })}</span>
+          {recipe.kcal_per_serving ? (
+            <span className="inline-flex items-center gap-1 tabular-nums"><Flame className="size-4" /> {t("kcal", { kcal: recipe.kcal_per_serving })}</span>
+          ) : null}
         </div>
       </div>
 

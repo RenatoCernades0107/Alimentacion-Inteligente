@@ -36,9 +36,22 @@ App PWA (inicialmente para celular) optimizada para iPhone, cuya misión es gest
    - Comida pasada no marcada como completada (solo padres).
    - Nueva propuesta de un hijo (solo padres).
 
+8. **Peso y metas.** Cada integrante tiene su peso, estatura, fecha de nacimiento, sexo y nivel de actividad física.
+   - Registra su peso con el tiempo (gráfico con la tendencia, que suaviza las fluctuaciones de agua y sal).
+   - Fija una **meta de peso** con un control que muestra las zonas bajo peso, saludable y sobrepeso; en el centro queda el peso recomendado para su estatura (IMC 22, o 25.5 desde los 60 años). No permite metas bajo el IMC saludable.
+   - La app calcula las **kcal diarias** (Mifflin–St Jeor × actividad) y un **plazo razonable** según el ritmo elegido (suave, recomendado o rápido), con topes de seguridad (déficit ≤ 25%, mínimo 1200 / 1500 kcal y el metabolismo basal). El plan se recalcula con cada pesaje.
+   - Los menores de 18 años no tienen meta de bajar de peso: sus kcal cubren el crecimiento (ecuaciones del IOM) y los administran los padres.
+   - Los padres pueden agregar **integrantes sin cuenta** (bebés, niños pequeños) para que también aparezcan en las porciones.
+   - Privacidad: cada persona ve sus datos; los padres ven y editan los de los menores de 18 años de la familia. Nadie ve el peso de otro adulto.
+   - Recordatorio para pesarse: semanal para adultos con meta; a los padres, con calma, para menores y sin cuenta.
+
+9. **Calorías y porciones por comida.** Cada comida muestra sus kcal aproximadas por porción (suma de sus ingredientes; en comidas sin receta se ingresan a mano).
+   - Cada comida muestra una **tabla de porciones**: cuánto le corresponde a cada integrante y cuántas kcal aporta, según su meta diaria y la franja del día (con 3 comidas: 25% desayuno, 40% almuerzo, 35% cena).
+   - Si la familia necesita más o menos porciones que las que rinde la receta, la app sugiere el multiplicador y, al ajustarlo, el inventario se descuenta con las cantidades ajustadas.
+
 ## Requerimientos no funcionales
 
-1. Hay dos tipos de usuario: padres e hijos. Los hijos solo tienen permiso de lectura, excepto para proponer comidas.
+1. Hay dos tipos de usuario: padres e hijos. Los hijos solo tienen permiso de lectura, excepto para proponer comidas. Además, los padres administran a los integrantes sin cuenta.
 2. La app usa Next.js y está optimizada para iPhone. Para recibir notificaciones la PWA debe estar agregada a la pantalla de inicio (iOS 16.4+); la app guía al usuario para hacerlo.
 3. La app usa componentes de shadcn/ui para mantener la consistencia de sus componentes.
 4. La app está en español e inglés; cada usuario elige su idioma.

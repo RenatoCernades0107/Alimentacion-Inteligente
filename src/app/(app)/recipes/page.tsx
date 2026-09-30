@@ -87,6 +87,11 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
                         <Clock className="size-3" /> {t("minutes", { count: recipe.time_minutes })}
                       </span>
                     )}
+                    {recipe.kcal_per_serving ? (
+                      <span className="text-muted-foreground tabular-nums">
+                        {recipe.kcal_complete ? "≈" : "~"} {recipe.kcal_per_serving} kcal
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </Link>
