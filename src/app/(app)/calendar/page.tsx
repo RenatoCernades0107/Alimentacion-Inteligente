@@ -5,6 +5,7 @@ import { addDays, isValidDate, startOfWeek, todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
 import { PageHeader } from "@/components/page-header";
 import { CalendarView } from "@/components/meals/calendar-view";
+import { DownloadPlan } from "@/components/meals/download-plan";
 import type { Meal } from "@/lib/types";
 import type { RecipeOption } from "@/components/meals/meal-drawer";
 
@@ -40,15 +41,17 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
       .neq("status", "cancelled"),
   ]);
 
+  const mealDates = [...new Set((nearby ?? []).map((m) => m.date as string))];
+
   return (
     <>
-      <PageHeader title={t("title")} />
+      <PageHeader title={t("title")} action={<DownloadPlan today={today} date={date} weekStart={weekStart} mealDates={mealDates} />} />
       <CalendarView
         date={date}
         today={today}
         weekStart={weekStart}
         meals={(meals ?? []) as Meal[]}
-        mealDates={[...new Set((nearby ?? []).map((m) => m.date as string))]}
+        mealDates={mealDates}
         recipes={(recipes ?? []) as RecipeOption[]}
         slots={slotsFor(family.meals_per_day)}
         isParent={isParent}

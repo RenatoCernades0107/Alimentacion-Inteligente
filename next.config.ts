@@ -4,6 +4,8 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
+  // El PDF del plan lee las fotos de las recetas desde el disco: se incluyen en la funciÃ³n que lo genera.
+  outputFileTracingIncludes: { "/api/plan-pdf": ["./public/recipes/**/*"] },
   // Las fotos de alimentos y boletas se envían a una server action (ya comprimidas en el cliente).
   experimental: {
     serverActions: { bodySizeLimit: "4mb" },

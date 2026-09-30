@@ -175,7 +175,7 @@ insert into foods (key, name_es, name_en, category, emoji, image_url, shelf_life
   ('bean_sprouts', 'Frejolito chino / germinados', 'Bean sprouts', 'produce', '🌱', 'https://www.themealdb.com/images/ingredients/Bean%20Sprouts-small.png', 3, 'g', array['frijol chino', 'frejolito chino', 'germinado', 'germinados', 'brotes de soya', 'sprouts']::text[]),
   ('mushrooms', 'Champiñones', 'Mushrooms', 'produce', '🍄', 'https://www.themealdb.com/images/ingredients/Mushrooms-small.png', 7, 'g', array['hongos', 'champiñón', 'setas']::text[]),
   ('cucumber', 'Pepino', 'Cucumber', 'produce', '🥒', 'https://www.themealdb.com/images/ingredients/Cucumber-small.png', 7, 'unit', array['pepinillo']::text[]),
-  ('avocado', 'Palta', 'Avocado', 'produce', '🥑', 'https://www.themealdb.com/images/ingredients/Avocado-small.png', 4, 'unit', array['aguacate']::text[]),
+  ('avocado', 'Palta', 'Avocado', 'fruit', '🥑', 'https://www.themealdb.com/images/ingredients/Avocado-small.png', 4, 'unit', array['aguacate']::text[]),
   ('mixed_vegetables', 'Verduras mixtas', 'Mixed vegetables', 'produce', '🥕', 'https://www.themealdb.com/images/ingredients/Stir-fry%20Vegetables-small.png', 5, 'g', array['verduras', 'vegetales', 'verduras para sopa', 'verduras congeladas', 'menestra de verduras', 'mixtura de verduras']::text[]),
   ('cilantro', 'Culantro', 'Cilantro', 'produce', '🌿', 'https://www.themealdb.com/images/ingredients/Cilantro-small.png', 7, 'unit', array['cilantro', 'coriander']::text[]),
   ('parsley', 'Perejil', 'Parsley', 'produce', '🌿', 'https://www.themealdb.com/images/ingredients/Parsley-small.png', 7, 'unit', array[]::text[]),
