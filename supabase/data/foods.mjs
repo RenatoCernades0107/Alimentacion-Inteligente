@@ -192,7 +192,7 @@ export const foods = [
   ["bean_sprouts", "Frejolito chino / germinados", "Bean sprouts", "produce", "🌱", "Bean Sprouts", 3, "g", ["frijol chino", "frejolito chino", "germinado", "germinados", "brotes de soya", "sprouts"]],
   ["mushrooms", "Champiñones", "Mushrooms", "produce", "🍄", "Mushrooms", 7, "g", ["hongos", "champiñón", "setas"]],
   ["cucumber", "Pepino", "Cucumber", "produce", "🥒", "Cucumber", 7, "unit", ["pepinillo"]],
-  ["avocado", "Palta", "Avocado", "produce", "🥑", "Avocado", 4, "unit", ["aguacate"]],
+  ["avocado", "Palta", "Avocado", "fruit", "🥑", "Avocado", 4, "unit", ["aguacate"]],
   ["mixed_vegetables", "Verduras mixtas", "Mixed vegetables", "produce", "🥕", "Stir-fry Vegetables", 5, "g", ["verduras", "vegetales", "verduras para sopa", "verduras congeladas", "menestra de verduras", "mixtura de verduras"]],
   ["cilantro", "Culantro", "Cilantro", "produce", "🌿", "Cilantro", 7, "unit", ["cilantro", "coriander"]],
   ["parsley", "Perejil", "Parsley", "produce", "🌿", "Parsley", 7, "unit", []],

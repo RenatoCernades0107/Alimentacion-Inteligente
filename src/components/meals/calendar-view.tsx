@@ -14,7 +14,7 @@ import { MealActionsDrawer } from "@/components/meals/meal-actions";
 import { RecipeImage } from "@/components/recipe-image";
 import { KcalChip } from "@/components/meals/kcal-chip";
 import { DayGoal } from "@/components/meals/day-goal";
-import { addDays, parseDate } from "@/lib/dates";
+import { addDays, fromLocal, parseDate, toLocal } from "@/lib/dates";
 import { slotSiblings } from "@/lib/meals";
 import { mealName, type Meal, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -27,14 +27,6 @@ const SLOT_STYLE: Record<MealSlot, { icon: LucideIcon; chip: string }> = {
   afternoon_snack: { icon: Cookie, chip: "bg-pink-100 text-pink-700" },
   dinner: { icon: Moon, chip: "bg-indigo-100 text-indigo-700" },
 };
-
-/** Fecha YYYY-MM-DD ↔ Date local (react-day-picker trabaja en hora local). */
-const toLocal = (s: string) => {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-};
-const fromLocal = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export function CalendarView({
   date, today, weekStart, meals, mealDates, recipes, slots, isParent, mealsPerDay, myKcal, myState, canEditData,
