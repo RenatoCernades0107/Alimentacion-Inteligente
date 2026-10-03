@@ -607,7 +607,7 @@
     "analyzingFood": "Reconociendo tus alimentos…",
     "analyzingReceipt": "Leyendo tu boleta…",
     "review": "Revisa lo que encontramos",
-    "reviewHint": "Corrige lo que haga falta y desmarca lo que no quieras agregar. La fecha es opcional: si la dejas vacía, la estimamos.",
+    "reviewHint": "Corrige lo que haga falta y desmarca lo que no quieras agregar. La fecha viene estimada según dónde lo guardes: cámbiala si el empaque dice otra.",
     "new": "Nuevo",
     "name": "Nombre",
     "lowConfidence": "No estamos seguros de este, revísalo.",

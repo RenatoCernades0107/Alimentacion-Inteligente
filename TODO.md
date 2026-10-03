@@ -31,11 +31,19 @@ Ver [specs.md](specs.md) para los requerimientos y [README.md](README.md) para l
 - [x] Crear alimento propio
 - [x] Vencimiento estimado para genéricos / manual para empaquetados
 - [x] Lista por vencimiento · editar / eliminar
+- [x] Predictor de vencimiento por tipo de alimento y lugar de guardado (ambiente / refrigerador / congelador) · el selector solo aparece si hay más de una opción segura (`src/lib/shelf-life.ts`)
+- [x] Madurez (verde / maduro) en frutas que maduran después de cosechadas, p. ej. la palta
+- [x] Consejos de conservación es/en (palta verde en el refri madura mal, tomate, papa, pan, carnes, sobras…) y avisos según el lugar elegido
+- [x] Cambiar el lugar de un alimento ya guardado recalcula el vencimiento
 
 ## 4. Recetas y sugerencias
 - [x] Seed de recetas Perú / USA
 - [x] Filtros por país y tipo de comida · modos "con lo que tengo" / "todas"
 - [x] Detalle de receta con ingredientes que tienes/faltan → agregar al calendario
+- [x] Recetas propias: crear con ingredientes del catálogo (o alimentos propios), pasos, porciones y kcal calculadas al guardar
+- [x] Editar una receta del catálogo guarda automáticamente tu versión en "Mis recetas" (la original no cambia; sin duplicados)
+- [x] Favoritas por usuario (corazón en tarjetas y detalle) · pestañas Todas / Mis recetas / Favoritas
+- [x] Permisos por RLS: recetas propias visibles para la familia, escritura solo por funciones SQL (`supabase/tests/recipes_rls.sql`)
 
 ## 5. Calendario
 - [x] Vista semanal con franjas según comidas por día

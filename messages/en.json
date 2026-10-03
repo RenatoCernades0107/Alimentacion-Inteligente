@@ -607,7 +607,7 @@
     "analyzingFood": "Recognizing your food…",
     "analyzingReceipt": "Reading your receipt…",
     "review": "Review what we found",
-    "reviewHint": "Fix anything that's off and uncheck what you don't want to add. The date is optional: leave it empty and we'll estimate it.",
+    "reviewHint": "Fix anything that's off and uncheck what you don't want to add. The date is estimated from where you store it: change it if the package says otherwise.",
     "new": "New",
     "name": "Name",
     "lowConfidence": "We're not sure about this one, please check it.",

@@ -122,7 +122,9 @@ export async function GET(request: NextRequest) {
       .in("status", ["planned", "completed"]);
 
     if (!todayCount && (await once(`nomeals:${family.id}:${today}`))) {
-      const top = suggest((recipes ?? []) as Recipe[], items, { mode: "any", countries: ["PE", "US"], mealType: "lunch", today })[0];
+      // El cliente admin ignora RLS: solo recetas del catálogo o propias de ESTA familia (nunca de otra).
+      const visible = ((recipes ?? []) as Recipe[]).filter((r) => !r.family_id || r.family_id === family.id);
+      const top = suggest(visible, items, { mode: "any", countries: ["PE", "US"], mealType: "lunch", today })[0];
       if (top) {
         sent += await notifyFamily(family.id, (locale) => ({
           title: tr(locale)("noMealsTitle"),
