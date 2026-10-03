@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { requireParent } from "@/lib/session";
-import { addDays, isValidDate, todayIn } from "@/lib/dates";
+import { isValidDate, todayIn } from "@/lib/dates";
 import { UNITS } from "@/lib/units";
+import { predictExpiry, RIPENESSES, STORAGES, validRipeness, validStorage, type Ripeness, type ShelfFood, type Storage } from "@/lib/shelf-life";
 import type { Unit } from "@/lib/types";
 
 export type NewItem = {
@@ -15,28 +17,46 @@ export type NewItem = {
   quantity: number;
   unit: Unit;
   expires_on?: string | null;
+  /** Dónde se guarda; si no corresponde a ese alimento, se usa el recomendado. */
+  storage?: Storage | null;
+  /** Madurez de la fruta que madura después de cosechada. */
+  ripeness?: Ripeness | null;
 };
 
 function cleanUnit(u: string): Unit {
   return (UNITS as string[]).includes(u) ? (u as Unit) : "unit";
 }
 
+// Lo que llega del cliente no es de fiar: un valor desconocido cuenta como "sin dato".
+const StorageSchema = z.enum(STORAGES).nullish().catch(null);
+const RipenessSchema = z.enum(RIPENESSES).nullish().catch(null);
+
 type Session = Awaited<ReturnType<typeof requireParent>>;
 
-/** Fila de inventario lista para insertar; sin fecha, se estima según la vida útil del alimento. */
+const SHELF_FOOD_FIELDS = "key, category, name_es, name_en, shelf_life_days";
+
+/** Lo que hace falta de un alimento para estimar su vida útil. */
+async function loadShelfFood(supabase: Session["supabase"], foodId: string | null | undefined): Promise<ShelfFood | null> {
+  if (!foodId) return null;
+  const { data } = await supabase.from("foods").select(SHELF_FOOD_FIELDS).eq("id", foodId).single();
+  return (data as ShelfFood | null) ?? null;
+}
+
+/**
+ * Fila de inventario lista para insertar. La fecha escrita (o impresa en el empaque) se respeta; sin fecha, se
+ * estima según el alimento, dónde se guarda y su madurez (src/lib/shelf-life.ts).
+ */
 async function buildRow({ supabase, family, user }: Session, input: NewItem) {
   if (!input.food_id && !input.product_name) throw new Error("invalid");
 
-  let expires_on = isValidDate(input.expires_on) ? input.expires_on : null;
-  let expiry_estimated = false;
-
-  if (!expires_on && input.food_id) {
-    const { data: food } = await supabase.from("foods").select("shelf_life_days").eq("id", input.food_id).single();
-    if (food?.shelf_life_days) {
-      expires_on = addDays(todayIn(family.timezone), food.shelf_life_days);
-      expiry_estimated = true;
-    }
-  }
+  const food = await loadShelfFood(supabase, input.food_id);
+  const prediction = predictExpiry({
+    food,
+    storage: StorageSchema.parse(input.storage),
+    ripeness: RipenessSchema.parse(input.ripeness),
+    from: todayIn(family.timezone),
+    printedDate: isValidDate(input.expires_on) ? input.expires_on : null,
+  });
 
   return {
     family_id: family.id,
@@ -47,8 +67,10 @@ async function buildRow({ supabase, family, user }: Session, input: NewItem) {
     image_url: input.image_url || null,
     quantity: Math.max(0, Number(input.quantity) || 0),
     unit: cleanUnit(input.unit),
-    expires_on,
-    expiry_estimated,
+    expires_on: prediction.expiresOn,
+    expiry_estimated: prediction.expiresOn !== null && prediction.estimated,
+    storage: prediction.storage,
+    ripeness: prediction.ripeness,
     created_by: user.id,
   };
 }
@@ -80,15 +102,38 @@ export async function addInventoryItems(items: (NewItem & { new_food?: NewFood |
   return rows.length;
 }
 
-export async function updateInventoryItem(id: string, input: { quantity: number; unit: Unit; expires_on: string | null }) {
+export type ItemEdit = {
+  quantity: number;
+  unit: Unit;
+  expires_on: string | null;
+  /** true si la fecha la calculó la app (y no la escribió el usuario ni viene del empaque). */
+  expiry_estimated?: boolean;
+  /** Dónde se guarda ahora ("lo pasé al congelador"); sin este campo no se toca. */
+  storage?: Storage | null;
+  ripeness?: Ripeness | null;
+};
+
+export async function updateInventoryItem(id: string, input: ItemEdit) {
   const { supabase } = await requireParent();
+  const expires_on = isValidDate(input.expires_on) ? input.expires_on : null;
+
+  // Lugar y madurez se validan contra el alimento del ítem (RLS deja leer solo los de la familia).
+  const patch: { storage?: Storage | null; ripeness?: Ripeness | null } = {};
+  if (input.storage !== undefined || input.ripeness !== undefined) {
+    const { data } = await supabase.from("inventory_items").select(`food:foods(${SHELF_FOOD_FIELDS})`).eq("id", id).single();
+    const food = ((data as { food: ShelfFood | null } | null)?.food ?? null) as ShelfFood | null;
+    if (input.storage !== undefined) patch.storage = validStorage(food, StorageSchema.parse(input.storage));
+    if (input.ripeness !== undefined) patch.ripeness = validRipeness(food, RipenessSchema.parse(input.ripeness));
+  }
+
   const { error } = await supabase
     .from("inventory_items")
     .update({
       quantity: Math.max(0, Number(input.quantity) || 0),
       unit: cleanUnit(input.unit),
-      expires_on: isValidDate(input.expires_on) ? input.expires_on : null,
-      expiry_estimated: false,
+      expires_on,
+      expiry_estimated: expires_on !== null && input.expiry_estimated === true,
+      ...patch,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);

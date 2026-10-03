@@ -113,7 +113,7 @@ const PROFILES: Record<string, Profile> = {
   seeds: prof("pantry", d(365, 540, 730), ["nuts"]),
   driedFruit: prof("pantry", d(180, 270), ["driedFruit"], { notes: { fridge: "opened" } }),
   fat: prof("pantry", d(180, 365), ["oil"], { notes: { fridge: "opened" } }),
-  yeast: prof("pantry", d(365, 180, 730), ["yeast"], { notes: { fridge: "opened", freezer: "opened" } }),
+  yeast: prof("pantry", d(365, 180, 365), ["yeast"], { notes: { fridge: "opened", freezer: "opened" } }),
   coffee: prof("pantry", d(180, undefined, 365), ["coffee"]),
   panettone: prof("pantry", d(90, undefined, 180), ["panettone"]),
   pudding: prof("pantry", d(365, 3), ["pudding"], { notes: { pantry: "unopened", fridge: "prepared" } }),
@@ -128,7 +128,7 @@ const PROFILES: Record<string, Profile> = {
   // --- Frutas que maduran: días según la madurez en cada lugar ---
   avocado: ripening(
     "unripe", "pantry", d(6, 6, 120), d(2, 4, 120),
-    ["avocadoRipen", { id: "avocadoRipeFridge", ripeness: "ripe" }, "avocadoCut", { id: "avocadoFreeze", storage: "freezer" }, RIPE_SOON],
+    [{ id: "avocadoRipen", ripeness: "unripe" }, { id: "avocadoRipeFridge", ripeness: "ripe" }, "avocadoCut", { id: "avocadoFreeze", storage: "freezer" }, RIPE_SOON],
     [{ id: "avocadoFridgeUnripe", storage: "fridge", ripeness: "unripe" }],
   ),
   banana: ripening(
@@ -144,7 +144,7 @@ const PROFILES: Record<string, Profile> = {
   mango: ripening("unripe", "pantry", d(6, 6, 240), d(3, 5, 240), ["mangoRipen", RIPE_SOON], [COLD_STOPS]),
   papaya: ripening("unripe", "pantry", d(5, 5, 240), d(3, 5, 240), ["papayaRipen", RIPE_SOON], [COLD_STOPS]),
   pear: ripening("unripe", "pantry", d(6, 10, 60), d(2, 5, 60), ["pearRipen", RIPE_SOON]),
-  stoneFruit: ripening("unripe", "pantry", d(5, 5, 180), d(2, 5, 180), ["stoneRipen", RIPE_SOON], [COLD_STOPS]),
+  stoneFruit: ripening("unripe", "pantry", d(5, 5, 60), d(2, 5, 60), ["stoneRipen", RIPE_SOON], [COLD_STOPS]),
   kiwi: ripening("unripe", "pantry", d(7, 21), d(2, 5), ["kiwiRipen", RIPE_SOON]),
   tomato: ripening(
     "ripe", "pantry", d(7, 7, 60), d(5, 7, 60),
@@ -177,7 +177,7 @@ const PROFILES: Record<string, Profile> = {
   yuca: prof("pantry", d(7, 3, 60), ["yuca"], { notes: { fridge: "cut", freezer: "cut" } }),
   andean: prof("pantry", d(14), ["andean"]),
   onion: prof("pantry", d(30, 7, 270), ["onion"], { notes: { fridge: "cut", freezer: "cut" } }),
-  garlic: prof("pantry", d(90, 7, 180), ["garlic"], { notes: { fridge: "cut", freezer: "cut" } }),
+  garlic: prof("pantry", d(90, 7, 90), ["garlic"], { notes: { fridge: "cut", freezer: "cut" } }),
   greenOnion: prof("fridge", d(undefined, 7, 180), ["greenOnion"], { notes: { freezer: "cut" } }),
   ginger: prof("fridge", d(5, 21, 180), ["ginger"]),
   pepper: prof("fridge", d(4, 10, 240), ["pepper", FREEZE_VEG]),
@@ -197,8 +197,8 @@ const PROFILES: Record<string, Profile> = {
   corn: prof("fridge", d(undefined, 5, 240), ["corn", FREEZE_VEG]),
   squash: prof("pantry", d(30, 5, 270), ["squash"], { notes: { fridge: "cut", freezer: "prepared" } }),
   legumeFresh: prof("fridge", d(undefined, 5, 240), ["legumeFresh", FREEZE_VEG]),
-  herb: prof("fridge", d(undefined, 7, 90), ["herbs"], { notes: { freezer: "cut" } }),
-  basil: prof("pantry", d(5, 5, 90), ["herbs"], { warns: [{ id: "basilFridge", storage: "fridge" }], notes: { freezer: "cut" } }),
+  herb: prof("fridge", d(undefined, 7, 60), ["herbs"], { notes: { freezer: "cut" } }),
+  basil: prof("pantry", d(5, 5, 60), ["herbs"], { warns: [{ id: "basilFridge", storage: "fridge" }], notes: { freezer: "cut" } }),
 
   // --- Lácteos y huevos (nunca al ambiente) ---
   eggs: prof("fridge", d(undefined, 28), ["eggs", "eggsRoom"], { care: true }),
@@ -227,7 +227,7 @@ const PROFILES: Record<string, Profile> = {
   bread: prof("pantry", d(5, undefined, 90), ["bread", { id: "breadFreeze", storage: "freezer" }]),
   pastry: prof("pantry", d(3, 4, 60), ["pastry"]),
   freshPasta: prof("fridge", d(undefined, 5, 60), ["freshPasta"], { care: true }),
-  dough: prof("fridge", d(undefined, 14, 90), ["freshPasta"], { care: true }),
+  dough: prof("fridge", d(undefined, 14, 60), ["freshPasta"], { care: true }),
 
   // --- Congelados y cocidos ---
   frozenOnly: prof("freezer", d(undefined, undefined, 90), ["frozenFood"]),

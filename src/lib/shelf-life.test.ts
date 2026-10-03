@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createTranslator } from "next-intl";
 import es from "../../messages/es.json";
 import en from "../../messages/en.json";
 import {
@@ -297,7 +298,7 @@ describe("textos", () => {
 
   it("los textos de los lugares, las aclaraciones y las duraciones existen", () => {
     for (const messages of [es, en]) {
-      const shelf = messages.shelf as Record<string, Record<string, string>>;
+      const shelf = messages.shelf as unknown as Record<string, Record<string, string>>;
       for (const k of ["pantry", "fridge", "freezer"]) {
         expect(shelf.storage[k]).toBeTruthy();
         expect(shelf.at[k]).toBeTruthy();
@@ -305,6 +306,24 @@ describe("textos", () => {
       for (const k of ["unopened", "opened", "cut", "thawed", "prepared"]) expect(shelf.note[k]).toBeTruthy();
       for (const k of ["unripe", "ripe"]) expect(shelf.state[k]).toBeTruthy();
       for (const k of ["days", "weeks", "months", "years"]) expect(shelf.duration[k]).toBeTruthy();
+    }
+  });
+});
+
+describe("textos con formato", () => {
+  it("las duraciones y la estimación se formatean sin errores en los dos idiomas", () => {
+    const expected = {
+      es: { days: ["1 día", "5 días"], weeks: ["1 semana", "3 semanas"], months: ["1 mes", "6 meses"], years: ["1 año", "2 años"], estimate: "Dura aprox. 5 días en el refrigerador." },
+      en: { days: ["1 day", "5 days"], weeks: ["1 week", "3 weeks"], months: ["1 month", "6 months"], years: ["1 year", "2 years"], estimate: "Lasts about 5 days in the fridge." },
+    };
+    for (const [locale, messages] of [["es", es], ["en", en]] as const) {
+      const t = createTranslator({ locale, messages, namespace: "shelf" });
+      const want = expected[locale];
+      for (const unit of ["days", "weeks", "months", "years"] as const) {
+        const n = unit === "days" ? [1, 5] : unit === "weeks" ? [1, 3] : unit === "months" ? [1, 6] : [1, 2];
+        expect(n.map((x) => t(`duration.${unit}`, { n: x }))).toEqual(want[unit]);
+      }
+      expect(t("estimate", { duration: t("duration.days", { n: 5 }), where: t("at.fridge") })).toBe(want.estimate);
     }
   });
 });
