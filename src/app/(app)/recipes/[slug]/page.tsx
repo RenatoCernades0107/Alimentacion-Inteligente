@@ -1,23 +1,27 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ArrowLeft, Check, Clock, ExternalLink, Flame, Users } from "lucide-react";
+import { ArrowLeft, Check, Clock, ExternalLink, Flame, GitBranch, Users } from "lucide-react";
 import { requireMember } from "@/lib/session";
 import { todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
-import { RECIPE_SELECT } from "@/lib/recipes";
+import { loadMemberNames, RECIPE_SELECT, sortIngredients, type RecipeIngredientRow } from "@/lib/recipes";
 import { formatQuantity } from "@/lib/units";
 import { FoodImage } from "@/components/food-image";
 import { RecipeImage } from "@/components/recipe-image";
 import { AddRecipeToCalendar } from "@/components/meals/add-recipe-to-calendar";
+import { FavoriteButton } from "@/components/recipes/favorite-button";
+import { RecipeActions } from "@/components/recipes/recipe-actions";
+import { Badge } from "@/components/ui/badge";
 import { localName, type Recipe } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import photoCredits from "../../../../../public/recipes/CREDITS.json";
 
 export default async function RecipePage({ params }: PageProps<"/recipes/[slug]">) {
   const { slug } = await params;
-  const { supabase, family, isParent } = await requireMember();
+  const { supabase, family, isParent, user } = await requireMember();
   const t = await getTranslations("recipes");
+  const tm = await getTranslations("myRecipes");
   const tu = await getTranslations("units");
   const tc = await getTranslations("countries");
   const locale = await getLocale();
@@ -30,7 +34,27 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
   const recipe = data as Recipe;
   const have = new Set((inventory ?? []).map((i) => i.food_id));
 
-  const ingredients = [...(recipe.recipe_ingredients ?? [])].sort((a, b) => Number(a.optional) - Number(b.optional));
+  const isCustom = !!recipe.family_id;
+  const isMine = isCustom && recipe.created_by === user.id;
+  const canDelete = isCustom && (isMine || isParent);
+
+  // Lo que rodea a la receta: su original (si es una versión), mi versión (si la hay), favorita, autor y uso en el calendario.
+  const [parent, myVersion, favorite, names, scheduled] = await Promise.all([
+    recipe.parent_recipe_id
+      ? supabase.from("recipes").select("slug, name_es, name_en").eq("id", recipe.parent_recipe_id).maybeSingle().then((r) => r.data)
+      : null,
+    !isMine
+      ? supabase.from("recipes").select("slug").eq("created_by", user.id).eq("parent_recipe_id", recipe.id).maybeSingle().then((r) => r.data)
+      : null,
+    supabase.from("recipe_favorites").select("recipe_id").eq("user_id", user.id).eq("recipe_id", recipe.id).maybeSingle().then((r) => !!r.data),
+    isCustom && !isMine ? loadMemberNames(supabase, family.id) : null,
+    canDelete
+      ? supabase.from("meals").select("id", { count: "exact", head: true }).eq("recipe_id", recipe.id).then((r) => r.count ?? 0)
+      : 0,
+  ]);
+  const author = recipe.created_by ? names?.get(recipe.created_by) : null;
+
+  const ingredients = sortIngredients(recipe.recipe_ingredients as RecipeIngredientRow[] | undefined);
   const steps = locale === "en" ? recipe.steps_en : recipe.steps_es;
   const slots = slotsFor(family.meals_per_day);
   const defaultSlot = slots.find((s) => recipe.meal_types.includes(s)) ?? (recipe.meal_types.includes("snack") ? slots.find((s) => s.includes("snack")) : undefined) ?? slots[0];
@@ -39,10 +63,11 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
 
   return (
     <article className="pb-6">
-      <div className="pt-3">
+      <div className="flex items-center justify-between pt-3">
         <Link href="/recipes" className="-ml-2 inline-flex items-center gap-1 rounded-lg p-2 text-sm text-muted-foreground">
           <ArrowLeft className="size-4" /> {t("title")}
         </Link>
+        <FavoriteButton recipeId={recipe.id} favorite={favorite} />
       </div>
 
       <div className="flex flex-col items-center gap-2 py-4 text-center">
@@ -53,7 +78,30 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
           </a>
         )}
         <h1 className="text-2xl font-bold">{localName(recipe, locale)}</h1>
-        <p className="text-muted-foreground">{locale === "en" ? recipe.description_en : recipe.description_es}</p>
+
+        {(isCustom || parent || myVersion) && (
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {isCustom && (
+              <Badge variant="secondary">
+                {isMine ? (recipe.parent_recipe_id ? tm("badgeMyVersion") : tm("badgeMine")) : author ? tm("badgeBy", { name: author }) : tm("badgeFamily")}
+              </Badge>
+            )}
+            {parent && (
+              <Link href={`/recipes/${parent.slug}`} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-primary">
+                <GitBranch className="size-3 shrink-0" /> {tm("modifiedFrom", { name: localName(parent, locale) })}
+              </Link>
+            )}
+            {myVersion && (
+              <Link href={`/recipes/${myVersion.slug}`} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs text-primary">
+                <GitBranch className="size-3 shrink-0" /> {tm("viewMyVersion")}
+              </Link>
+            )}
+          </div>
+        )}
+
+        {(locale === "en" ? recipe.description_en : recipe.description_es) && (
+          <p className="text-muted-foreground">{locale === "en" ? recipe.description_en : recipe.description_es}</p>
+        )}
         <div className="flex flex-wrap justify-center gap-3 text-sm text-muted-foreground">
           <span>{recipe.country === "PE" ? "🇵🇪" : "🇺🇸"} {tc(recipe.country)}</span>
           {recipe.time_minutes && <span className="inline-flex items-center gap-1"><Clock className="size-4" /> {t("minutes", { count: recipe.time_minutes })}</span>}
@@ -64,14 +112,23 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
         </div>
       </div>
 
-      <AddRecipeToCalendar
-        recipeId={recipe.id}
-        date={todayIn(family.timezone)}
-        slot={defaultSlot}
-        slots={slots}
-        isParent={isParent}
-        recipes={[{ id: recipe.id, slug: recipe.slug, name_es: recipe.name_es, name_en: recipe.name_en, emoji: recipe.emoji, image_url: recipe.image_url, meal_types: recipe.meal_types, country: recipe.country }]}
-      />
+      <div className="space-y-2">
+        <AddRecipeToCalendar
+          recipeId={recipe.id}
+          date={todayIn(family.timezone)}
+          slot={defaultSlot}
+          slots={slots}
+          isParent={isParent}
+          recipes={[{ id: recipe.id, slug: recipe.slug, name_es: recipe.name_es, name_en: recipe.name_en, emoji: recipe.emoji, image_url: recipe.image_url, meal_types: recipe.meal_types, country: recipe.country }]}
+        />
+        <RecipeActions
+          recipeId={recipe.id}
+          slug={recipe.slug}
+          canDelete={canDelete}
+          originalSlug={isMine && parent ? parent.slug : null}
+          scheduledCount={scheduled}
+        />
+      </div>
 
       <h2 className="mt-6 mb-2 text-lg font-semibold">{t("ingredients")}</h2>
       <ul className="divide-y rounded-2xl border bg-card">
@@ -93,15 +150,19 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
         })}
       </ul>
 
-      <h2 className="mt-6 mb-2 text-lg font-semibold">{t("steps")}</h2>
-      <ol className="space-y-3">
-        {steps.map((step, i) => (
-          <li key={i} className="flex gap-3">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{i + 1}</span>
-            <p className="pt-0.5">{step}</p>
-          </li>
-        ))}
-      </ol>
+      {steps.length > 0 && (
+        <>
+          <h2 className="mt-6 mb-2 text-lg font-semibold">{t("steps")}</h2>
+          <ol className="space-y-3">
+            {steps.map((step, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">{i + 1}</span>
+                <p className="pt-0.5">{step}</p>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
 
       {recipe.source_url && (
         <a href={recipe.source_url} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline">

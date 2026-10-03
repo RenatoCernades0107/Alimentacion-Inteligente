@@ -31,7 +31,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
       .lte("date", weekEnd)
       .neq("status", "cancelled")
       .order("created_at"),
-    supabase.from("recipes").select("id, slug, name_es, name_en, emoji, image_url, meal_types, country").order("name_es"),
+    supabase.from("recipes").select("id, slug, name_es, name_en, emoji, image_url, meal_types, country, family_id").order("name_es"),
     // Días con comidas alrededor de la semana, para marcarlos en el selector de mes.
     supabase
       .from("meals")

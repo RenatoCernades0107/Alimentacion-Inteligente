@@ -88,6 +88,12 @@ export type Recipe = {
   kcal_per_serving: number | null;
   /** false si a algún ingrediente obligatorio le falta el dato de kcal. */
   kcal_complete: boolean;
+  /** null = receta del catálogo; si no, la familia dueña de esta receta propia. */
+  family_id?: string | null;
+  /** Autor de una receta propia. */
+  created_by?: string | null;
+  /** Original de la que es una versión personal (null si es del catálogo o se creó desde cero). */
+  parent_recipe_id?: string | null;
   recipe_ingredients?: RecipeIngredient[];
 };
 

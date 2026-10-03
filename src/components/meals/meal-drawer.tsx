@@ -16,7 +16,10 @@ import { mealTypeForSlot, RECURRENCES } from "@/lib/meals";
 import { localName, type MealSlot, type Recurrence, type Recipe } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export type RecipeOption = Pick<Recipe, "id" | "slug" | "name_es" | "name_en" | "emoji" | "image_url" | "meal_types" | "country">;
+export type RecipeOption = Pick<Recipe, "id" | "slug" | "name_es" | "name_en" | "emoji" | "image_url" | "meal_types" | "country"> & {
+  /** Solo las recetas propias de la familia lo traen (null = catálogo). */
+  family_id?: string | null;
+};
 
 export type MealDraft = {
   id?: string;
@@ -62,6 +65,7 @@ function MealForm({
   const tr = useTranslations("recurrence");
   const tc = useTranslations("common");
   const tp = useTranslations("portions");
+  const tmy = useTranslations("myRecipes");
   const locale = useLocale();
   const [pending, start] = useTransition();
 
@@ -82,6 +86,8 @@ function MealForm({
   const type = mealTypeForSlot(slot);
   const options = recipes
     .filter((r) => (query ? normalize(r.name_es + " " + r.name_en).includes(normalize(query)) : r.meal_types.includes(type)))
+    // Las recetas propias de la familia primero: ordenadas por nombre entre las del catálogo quedarían fuera de las 30 que se ven.
+    .sort((a, b) => Number(!!b.family_id) - Number(!!a.family_id))
     .slice(0, 30);
 
   function save(scope: Scope = "one") {
@@ -160,6 +166,7 @@ function MealForm({
                     <button type="button" onClick={() => setRecipeId(r.id)} className="flex w-full items-center gap-3 px-3 py-2 text-left active:bg-muted">
                       <RecipeImage src={r.image_url} emoji={r.emoji} className="size-8 rounded-lg text-xl" />
                       <span className="flex-1">{localName(r, locale)}</span>
+                      {r.family_id && <span className="text-xs text-muted-foreground">{tmy("customTag")}</span>}
                       <span className="text-sm">{r.country === "PE" ? "🇵🇪" : "🇺🇸"}</span>
                     </button>
                   </li>

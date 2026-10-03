@@ -1,36 +1,49 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { Clock } from "lucide-react";
+import { Plus } from "lucide-react";
 import { requireMember } from "@/lib/session";
 import { todayIn } from "@/lib/dates";
 import { suggest, type SuggestionMode } from "@/lib/suggestions";
-import { loadRecipesAndInventory, parseCountries } from "@/lib/recipes";
+import { loadFavoriteIds, loadMemberNames, loadRecipesAndInventory, parseCountries } from "@/lib/recipes";
 import { PageHeader } from "@/components/page-header";
-import { RecipeImage } from "@/components/recipe-image";
-import { Badge } from "@/components/ui/badge";
+import { RecipeCard, type RecipeOwner } from "@/components/recipes/recipe-card";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { localName, type Country } from "@/lib/types";
+import type { Country, Recipe } from "@/lib/types";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
+const TABS = ["all", "mine", "favorites"] as const;
+type Tab = (typeof TABS)[number];
 
 export default async function RecipesPage({ searchParams }: PageProps<"/recipes">) {
   const sp = await searchParams;
   const mode: SuggestionMode = sp.mode === "have" ? "have" : "any";
   const countries = parseCountries(sp.country);
   const mealType = MEAL_TYPES.find((m) => m === sp.type);
+  const tab: Tab = TABS.find((x) => x === sp.tab) ?? "all";
 
-  const { supabase, family } = await requireMember();
+  const { supabase, family, user } = await requireMember();
   const t = await getTranslations("recipes");
+  const tm = await getTranslations("myRecipes");
   const tc = await getTranslations("countries");
-  const tm = await getTranslations("mealTypes");
+  const tmt = await getTranslations("mealTypes");
   const locale = await getLocale();
 
-  const { recipes, inventory } = await loadRecipesAndInventory(supabase, family.id);
-  const results = suggest(recipes, inventory, { mode, countries, mealType, today: todayIn(family.timezone) });
+  const [{ recipes, inventory }, favorites, memberNames] = await Promise.all([
+    loadRecipesAndInventory(supabase, family.id),
+    loadFavoriteIds(supabase, user.id),
+    loadMemberNames(supabase, family.id),
+  ]);
+
+  // Los filtros de país y comida y el modo "con lo que tengo" aplican dentro de cada pestaña.
+  const mine = recipes.filter((r) => r.created_by === user.id);
+  const favs = recipes.filter((r) => favorites.has(r.id));
+  const inTab: Recipe[] = tab === "mine" ? mine : tab === "favorites" ? favs : recipes;
+  const results = suggest(inTab, inventory, { mode, countries, mealType, today: todayIn(family.timezone) });
 
   const href = (patch: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
-    const next = { mode, country: countries.join(","), type: mealType, ...patch };
+    const next = { tab: tab === "all" ? undefined : tab, mode, country: countries.join(","), type: mealType, ...patch };
     for (const [k, v] of Object.entries(next)) if (v) params.set(k, v);
     return `/recipes?${params}`;
   };
@@ -39,11 +52,49 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
     return href({ country: (set.length ? set : [c]).join(",") });
   };
 
+  const ownerOf = (r: Recipe): RecipeOwner => {
+    if (!r.family_id) return null;
+    if (r.created_by === user.id) return { kind: r.parent_recipe_id ? "myVersion" : "mine" };
+    const name = r.created_by ? memberNames.get(r.created_by) : null;
+    return name ? { kind: "member", name } : { kind: "family" };
+  };
+
+  const tabLabel: Record<Tab, { label: string; count?: number }> = {
+    all: { label: tm("tabAll") },
+    mine: { label: tm("tabMine"), count: mine.length },
+    favorites: { label: tm("tabFavorites"), count: favs.length },
+  };
+
   return (
     <>
-      <PageHeader title={t("title")} />
+      <PageHeader
+        title={t("title")}
+        action={
+          <Link href="/recipes/new" className={cn(buttonVariants({ size: "lg" }), "h-9 px-3")}>
+            <Plus /> {tm("newRecipe")}
+          </Link>
+        }
+      />
 
-      <div className="grid grid-cols-2 rounded-xl bg-muted p-1 text-sm font-medium">
+      <nav aria-label={t("title")} className="flex border-b text-sm font-medium">
+        {TABS.map((x) => (
+          <Link
+            key={x}
+            href={href({ tab: x === "all" ? undefined : x })}
+            scroll={false}
+            aria-current={tab === x ? "page" : undefined}
+            className={cn(
+              "-mb-px flex-1 border-b-2 py-2.5 text-center whitespace-nowrap",
+              tab === x ? "border-primary text-foreground" : "border-transparent text-muted-foreground",
+            )}
+          >
+            {tabLabel[x].label}
+            {tabLabel[x].count ? <span className="ml-1 text-xs text-muted-foreground tabular-nums">{tabLabel[x].count}</span> : null}
+          </Link>
+        ))}
+      </nav>
+
+      <div className="mt-3 grid grid-cols-2 rounded-xl bg-muted p-1 text-sm font-medium">
         {(["have", "any"] as const).map((m) => (
           <Link key={m} href={href({ mode: m })} className={cn("rounded-lg py-2 text-center", mode === m ? "bg-background shadow-sm" : "text-muted-foreground")}>
             {m === "have" ? t("modeHave") : t("modeAny")}
@@ -60,46 +111,47 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
         <span className="mx-1 w-px shrink-0 bg-border" />
         <Chip href={href({ type: undefined })} active={!mealType}>{t("allMeals")}</Chip>
         {MEAL_TYPES.map((m) => (
-          <Chip key={m} href={href({ type: m })} active={mealType === m}>{tm(m)}</Chip>
+          <Chip key={m} href={href({ type: m })} active={mealType === m}>{tmt(m)}</Chip>
         ))}
       </div>
 
       {results.length === 0 ? (
-        <p className="py-16 text-center text-muted-foreground">{t("empty")}</p>
+        tab === "mine" && mine.length === 0 ? (
+          <EmptyState emoji="👩‍🍳" title={tm("emptyMineTitle")} text={tm("emptyMine")}>
+            <Link href="/recipes/new" className={cn(buttonVariants({ size: "lg" }), "h-10 px-4")}>
+              <Plus /> {tm("create")}
+            </Link>
+          </EmptyState>
+        ) : tab === "favorites" && favs.length === 0 ? (
+          <EmptyState emoji="🤍" title={tm("emptyFavoritesTitle")} text={tm("emptyFavorites")}>
+            <Link href={href({ tab: undefined })} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-10 px-4")}>
+              {tm("seeAll")}
+            </Link>
+          </EmptyState>
+        ) : (
+          <p className="py-16 text-center text-muted-foreground">{tab === "all" && mode === "have" ? t("empty") : tm("emptyFiltered")}</p>
+        )
       ) : (
         <ul className="mt-4 space-y-3">
-          {results.map(({ recipe, have, total, missing, expiringUsed }) => (
-            <li key={recipe.id}>
-              <Link href={`/recipes/${recipe.slug}`} className="flex gap-3 rounded-2xl border bg-card p-3 active:bg-muted">
-                <RecipeImage src={recipe.image_url} emoji={recipe.emoji} className="size-16 text-4xl" />
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold leading-tight">{localName(recipe, locale)}</span>
-                    <span className="shrink-0 text-sm">{recipe.country === "PE" ? "🇵🇪" : "🇺🇸"}</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    <Badge variant={missing.length === 0 ? "default" : "secondary"}>
-                      {missing.length === 0 ? t("haveAll") : t("haveCount", { have, total })}
-                    </Badge>
-                    {expiringUsed > 0 && <Badge variant="outline" className="border-amber-300 text-amber-800">⏰ {t("usesExpiring")}</Badge>}
-                    {recipe.time_minutes && (
-                      <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        <Clock className="size-3" /> {t("minutes", { count: recipe.time_minutes })}
-                      </span>
-                    )}
-                    {recipe.kcal_per_serving ? (
-                      <span className="text-muted-foreground tabular-nums">
-                        {recipe.kcal_complete ? "≈" : "~"} {recipe.kcal_per_serving} kcal
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </Link>
+          {results.map((s) => (
+            <li key={s.recipe.id}>
+              <RecipeCard suggestion={s} locale={locale} favorite={favorites.has(s.recipe.id)} owner={ownerOf(s.recipe)} />
             </li>
           ))}
         </ul>
       )}
     </>
+  );
+}
+
+function EmptyState({ emoji, title, text, children }: { emoji: string; title: string; text: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-3 px-4 py-14 text-center">
+      <span className="text-5xl" aria-hidden>{emoji}</span>
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <p className="max-w-xs text-sm text-muted-foreground">{text}</p>
+      {children}
+    </div>
   );
 }
 
