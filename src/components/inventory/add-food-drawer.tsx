@@ -21,12 +21,15 @@ import { StoreBadges } from "@/components/store-badges";
 import { GenericFoodLink, ResultRow, useDebounced } from "@/components/inventory/food-picker";
 import { PhotoStep } from "@/components/inventory/photo-step";
 import { ReviewStep } from "@/components/inventory/review-step";
+import { EstimateHint, RipenessPicker, ShelfAdvice, StoragePicker } from "@/components/inventory/storage-fields";
+import { predictExpiry, validRipeness, validStorage, type Ripeness, type Storage } from "@/lib/shelf-life";
 import type { DetectedItem } from "@/lib/photo";
 
 type Selection = { kind: "food"; food: Food } | { kind: "product"; product: OffProduct };
 type Step = "search" | "scan" | "details" | "custom" | "photo" | "review";
 
-export function AddFoodDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/** `today` (YYYY-MM-DD, en la zona horaria de la familia) es la fecha desde la que se estima el vencimiento. */
+export function AddFoodDrawer({ open, onOpenChange, today }: { open: boolean; onOpenChange: (open: boolean) => void; today: string }) {
   const t = useTranslations("search");
   const ti = useTranslations("inventory");
   const tp = useTranslations("photo");
@@ -75,9 +78,9 @@ export function AddFoodDrawer({ open, onOpenChange }: { open: boolean; onOpenCha
               }}
             />
           )}
-          {step === "review" && <ReviewStep items={detected} onDone={() => onOpenChange(false)} />}
+          {step === "review" && <ReviewStep items={detected} today={today} onDone={() => onOpenChange(false)} />}
           {step === "custom" && <CustomStep initialName={query} onCreated={(food) => select({ kind: "food", food })} />}
-          {step === "details" && selection && <DetailsStep selection={selection} onDone={() => onOpenChange(false)} />}
+          {step === "details" && selection && <DetailsStep selection={selection} today={today} onDone={() => onOpenChange(false)} />}
         </div>
       </DrawerContent>
     </Drawer>
@@ -338,7 +341,7 @@ function CustomStep({ initialName, onCreated }: { initialName: string; onCreated
   );
 }
 
-function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () => void }) {
+function DetailsStep({ selection, today, onDone }: { selection: Selection; today: string; onDone: () => void }) {
   const t = useTranslations("inventory");
   const ts = useTranslations("search");
   const tu = useTranslations("units");
@@ -354,7 +357,9 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
 
   const [quantity, setQuantity] = useState(String(initial.quantity));
   const [unit, setUnit] = useState<Unit>(initial.unit);
+  // Lo que escribió el usuario; mientras no toque la fecha se muestra (y se guarda) la estimada.
   const [expires, setExpires] = useState("");
+  const [dateTouched, setDateTouched] = useState(false);
 
   // Para productos de marca: a qué alimento genérico corresponde (recetas, sugerencias, stock).
   const [linked, setLinked] = useState<Food | null>(null);
@@ -370,17 +375,29 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
     });
   }, [selection]);
 
+  // Dónde se guarda y qué tan madura está: solo se pregunta cuando el alimento lo necesita (src/lib/shelf-life.ts).
+  const shelfFood = selection.kind === "food" ? selection.food : linked;
+  const [pickedStorage, setPickedStorage] = useState<Storage | null>(null);
+  const [pickedRipeness, setPickedRipeness] = useState<Ripeness | null>(null);
+  const storage = validStorage(shelfFood, pickedStorage);
+  const ripeness = validRipeness(shelfFood, pickedRipeness);
+  const estimate = predictExpiry({ food: shelfFood, storage, ripeness, from: today });
+  // El empaque trae su fecha: no se estima, pero igual se anota dónde se guarda.
+  const shownDate = dateTouched ? expires : isProduct ? "" : (estimate.expiresOn ?? "");
+
   const name = selection.kind === "food" ? localName(selection.food, locale) : selection.product.name;
   const image = selection.kind === "food" ? selection.food.image_url : selection.product.image;
   const emoji = selection.kind === "food" ? selection.food.emoji : "📦";
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    // Sin tocar la fecha va vacía: el servidor estima lo mismo que se está mostrando.
+    const expires_on = dateTouched ? expires || null : null;
     start(async () => {
       try {
         await addInventoryItem(
           selection.kind === "food"
-            ? { food_id: selection.food.id, quantity: Number(quantity), unit, expires_on: expires || null }
+            ? { food_id: selection.food.id, quantity: Number(quantity), unit, expires_on, storage, ripeness }
             : {
                 food_id: linked?.id ?? null,
                 barcode: selection.product.code,
@@ -389,7 +406,9 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
                 image_url: selection.product.image,
                 quantity: Number(quantity),
                 unit,
-                expires_on: expires || null,
+                expires_on,
+                storage,
+                ripeness,
               },
         );
         toast.success(t("added"));
@@ -428,11 +447,34 @@ function DetailsStep({ selection, onDone }: { selection: Selection; onDone: () =
         </div>
       </div>
 
+      <StoragePicker food={shelfFood} value={pickedStorage} onChange={setPickedStorage} id="add-storage" />
+      <RipenessPicker food={shelfFood} value={pickedRipeness} onChange={setPickedRipeness} id="add-ripeness" />
+
       <div className="space-y-2">
         <Label htmlFor="exp">{t("expiresOn")}</Label>
-        <Input id="exp" type="date" value={expires} onChange={(e) => setExpires(e.target.value)} required={isProduct} className="h-10" />
-        <p className="text-xs text-muted-foreground">{isProduct ? t("expiresOnHintPackaged") : t("expiresOnHintGeneric")}</p>
+        <Input
+          id="exp"
+          type="date"
+          value={shownDate}
+          onChange={(e) => {
+            setExpires(e.target.value);
+            setDateTouched(true);
+          }}
+          required={isProduct}
+          className="h-10"
+        />
+        <p className="text-xs text-muted-foreground">
+          {!dateTouched && !isProduct && estimate.expiresOn ? (
+            <EstimateHint days={estimate.days} storage={estimate.storage} />
+          ) : isProduct ? (
+            t("expiresOnHintPackaged")
+          ) : (
+            t("expiresOnHintGeneric")
+          )}
+        </p>
       </div>
+
+      <ShelfAdvice food={shelfFood} storage={storage} ripeness={ripeness} />
 
       {isProduct && (
         <GenericFoodLink

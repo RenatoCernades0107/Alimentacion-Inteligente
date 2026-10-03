@@ -9,20 +9,32 @@ import { Badge } from "@/components/ui/badge";
 import { FoodImage } from "@/components/food-image";
 import { NativeSelect } from "@/components/native-select";
 import { GenericFoodLink } from "@/components/inventory/food-picker";
+import { ShelfAdvice, StorageSelects } from "@/components/inventory/storage-fields";
 import { addInventoryItems } from "@/app/actions/inventory";
 import { UNITS } from "@/lib/units";
+import { predictExpiry, validRipeness, validStorage, type Ripeness, type ShelfFood, type Storage } from "@/lib/shelf-life";
 import { localName, type Food, type Unit } from "@/lib/types";
 import type { DetectedItem, DetectedMatch } from "@/lib/photo";
 import { cn } from "@/lib/utils";
 
-type Row = DetectedItem & { checked: boolean; expires: string };
+/** `expires` es lo que escribió el usuario (solo vale si tocó la fecha); si no, se estima. */
+type Row = DetectedItem & { checked: boolean; expires: string; dateTouched: boolean; storage: Storage | null; ripeness: Ripeness | null };
+
+/** El alimento del que se estima la vida útil: el genérico, el asociado al producto, o el nuevo (por su nombre). */
+function shelfFoodOf(match: DetectedMatch): ShelfFood | null {
+  if (match.kind === "food") return match.food;
+  if (match.kind === "product") return match.linked;
+  return { key: null, category: "custom", name_es: match.name, name_en: match.name };
+}
 
 /** Revisión de lo que se detectó en la foto: se corrige y se agrega todo de una vez. */
-export function ReviewStep({ items, onDone }: { items: DetectedItem[]; onDone: () => void }) {
+export function ReviewStep({ items, today, onDone }: { items: DetectedItem[]; today: string; onDone: () => void }) {
   const t = useTranslations("photo");
   const tc = useTranslations("common");
   const [pending, start] = useTransition();
-  const [rows, setRows] = useState<Row[]>(() => items.map((i) => ({ ...i, checked: i.confidence !== "low", expires: "" })));
+  const [rows, setRows] = useState<Row[]>(() =>
+    items.map((i) => ({ ...i, checked: i.confidence !== "low", expires: "", dateTouched: false, storage: null, ripeness: null })),
+  );
 
   const update = (id: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const selected = rows.filter((r) => r.checked);
@@ -31,8 +43,16 @@ export function ReviewStep({ items, onDone }: { items: DetectedItem[]; onDone: (
     start(async () => {
       try {
         await addInventoryItems(
-          selected.map(({ match, quantity, unit, expires }) => {
-            const base = { quantity, unit, expires_on: expires || null };
+          selected.map(({ match, quantity, unit, expires, dateTouched, storage, ripeness }) => {
+            const food = shelfFoodOf(match);
+            // Sin tocar la fecha va vacía: el servidor estima lo mismo que se mostraba.
+            const base = {
+              quantity,
+              unit,
+              expires_on: dateTouched ? expires || null : null,
+              storage: validStorage(food, storage),
+              ripeness: validRipeness(food, ripeness),
+            };
             if (match.kind === "food") return { ...base, food_id: match.food.id };
             if (match.kind === "new") return { ...base, new_food: { name: match.name, emoji: match.emoji, default_unit: unit } };
             return {
@@ -57,7 +77,7 @@ export function ReviewStep({ items, onDone }: { items: DetectedItem[]; onDone: (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{t("reviewHint")}</p>
       {rows.map((row) => (
-        <ReviewRow key={row.id} row={row} onChange={(patch) => update(row.id, patch)} />
+        <ReviewRow key={row.id} row={row} today={today} onChange={(patch) => update(row.id, patch)} />
       ))}
       <div className="sticky bottom-0 bg-background pt-2 pb-1">
         <Button size="lg" className="h-11 w-full text-base" disabled={pending || !selected.length} onClick={submit}>
@@ -68,7 +88,7 @@ export function ReviewStep({ items, onDone }: { items: DetectedItem[]; onDone: (
   );
 }
 
-function ReviewRow({ row, onChange }: { row: Row; onChange: (patch: Partial<Row>) => void }) {
+function ReviewRow({ row, today, onChange }: { row: Row; today: string; onChange: (patch: Partial<Row>) => void }) {
   const t = useTranslations("photo");
   const ti = useTranslations("inventory");
   const tu = useTranslations("units");
@@ -78,6 +98,10 @@ function ReviewRow({ row, onChange }: { row: Row; onChange: (patch: Partial<Row>
   const { match } = row;
 
   const view = matchView(match, locale);
+  const shelfFood = shelfFoodOf(match);
+  const storage = validStorage(shelfFood, row.storage);
+  const ripeness = validRipeness(shelfFood, row.ripeness);
+  const estimate = predictExpiry({ food: shelfFood, storage, ripeness, from: today });
 
   function pick(food: Food) {
     setPicking(false);
@@ -104,7 +128,7 @@ function ReviewRow({ row, onChange }: { row: Row; onChange: (patch: Partial<Row>
           {match.kind === "new" && (
             <Input value={match.name} onChange={(e) => onChange({ match: { ...match, name: e.target.value } })} maxLength={80} className="h-10" aria-label={t("name")} />
           )}
-          <div className="grid grid-cols-[1fr_1fr_1.4fr] gap-2">
+          <div className="grid grid-cols-[0.75fr_0.95fr_1.7fr] gap-2">
             <Input
               type="number"
               inputMode="decimal"
@@ -118,8 +142,22 @@ function ReviewRow({ row, onChange }: { row: Row; onChange: (patch: Partial<Row>
             <NativeSelect value={row.unit} onChange={(e) => onChange({ unit: e.target.value as Unit })} aria-label={ti("unit")}>
               {UNITS.map((u) => <option key={u} value={u}>{tu(u)}</option>)}
             </NativeSelect>
-            <Input type="date" value={row.expires} onChange={(e) => onChange({ expires: e.target.value })} className="h-10" aria-label={ti("expiresOn")} />
+            <Input
+              type="date"
+              value={row.dateTouched ? row.expires : (estimate.expiresOn ?? "")}
+              onChange={(e) => onChange({ expires: e.target.value, dateTouched: true })}
+              className="h-10"
+              aria-label={ti("expiresOn")}
+            />
           </div>
+          <StorageSelects
+            food={shelfFood}
+            storage={row.storage}
+            ripeness={row.ripeness}
+            onStorage={(s) => onChange({ storage: s })}
+            onRipeness={(r) => onChange({ ripeness: r })}
+          />
+          <ShelfAdvice food={shelfFood} storage={storage} ripeness={ripeness} tips={false} />
           {picking ? (
             <GenericFoodLink food={null} guessing={false} picking onChange={() => {}} onPick={pick} />
           ) : (

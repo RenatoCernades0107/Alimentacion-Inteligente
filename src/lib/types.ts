@@ -56,6 +56,10 @@ export type InventoryItem = {
   unit: Unit;
   expires_on: string | null;
   expiry_estimated: boolean;
+  /** Dónde se guarda (src/lib/shelf-life.ts); null en filas antiguas o sin dato: se usa el lugar recomendado. */
+  storage: "pantry" | "fridge" | "freezer" | null;
+  /** Madurez de la fruta que madura después de cosechada; null si no aplica. */
+  ripeness: "unripe" | "ripe" | null;
   created_at: string;
   food?: Food | null;
 };
