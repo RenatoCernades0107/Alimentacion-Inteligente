@@ -269,7 +269,7 @@ insert into meals (family_id, date, slot, recipe_id, status) values (:F1, curren
 insert into meals (family_id, date, slot, recipe_id, status) values (:F1, current_date + 1, 'dinner', :'r1', 'completed');
 insert into meal_series (family_id, recipe_id, slot, recurrence, start_date, materialized_until)
 values (:F1, :'r1', 'lunch', 'weekly', current_date, current_date);
--- Una comida con una receta de la que A sigue siendo dueño pero con nombre propio ya escrito no cambia.
+-- Una comida que ya tiene título propio no lo pierde.
 insert into meals (family_id, date, slot, recipe_id, title, status) values (:F1, current_date + 2, 'lunch', :'cv1', 'Mi nombre', 'planned');
 select delete_recipe(:'r1');
 select t_expect_count('select 1 from recipes where id = ' || quote_literal(:'r1'), 0, 'R1 eliminada');
@@ -298,6 +298,45 @@ set local role authenticated;
 select delete_recipe(:'cv1');
 select t_expect_count('select 1 from meals where recipe_id is null and title = ''Mi nombre''', 1, 'la comida con título propio lo conserva');
 reset role;
+
+\echo '== Quitar a un integrante, borrar la cuenta de un autor y borrar una familia'
+-- B sale de la familia: ya no ve las recetas propias de F1 ni puede cambiar o eliminar la suya.
+select set_config('request.jwt.claim.sub', :A, true) \gset
+set local role authenticated;
+select remove_member(:B);
+reset role;
+select set_config('request.jwt.claim.sub', :B, true) \gset
+set local role authenticated;
+select t_expect_count('select 1 from recipes where family_id is not null', 0, 'B, fuera de la familia, no ve recetas propias');
+select t_expect_err('select delete_recipe(' || quote_literal(:'bv3') || ')', 'not found');
+select t_expect_err('select * from t_save(' || quote_literal(:'bv3') || ', ''X'', jsonb_build_array(t_ing(' || quote_literal(:'f_salt') || ')))', 'no family');
+reset role;
+-- La receta de B sigue en la familia: A la ve y, como padre, puede limpiarla.
+select set_config('request.jwt.claim.sub', :A, true) \gset
+set local role authenticated;
+select t_expect_count('select 1 from recipes where id = ' || quote_literal(:'bv3'), 1, 'A sigue viendo la receta de B');
+select delete_recipe(:'bv3');
+select t_expect_count('select 1 from recipes where id = ' || quote_literal(:'bv3'), 0, 'A eliminó la receta de quien ya no está en la familia');
+reset role;
+
+-- Una familia con recetas propias programadas se puede borrar (cascada) sin que falle el CHECK de meals.
+select set_config('request.jwt.claim.sub', :C, true) \gset
+set local role authenticated;
+insert into meals (family_id, date, slot, recipe_id, status) values (:F2, current_date, 'lunch', :'rc1', 'planned');
+insert into meal_series (family_id, recipe_id, slot, recurrence, start_date, materialized_until)
+values (:F2, :'rc1', 'dinner', 'daily', current_date, current_date);
+reset role;
+delete from families where id = :F2;
+select t_expect_count('select 1 from recipes where family_id = ' || quote_literal(:F2), 0, 'las recetas de la familia borrada se eliminaron');
+select t_expect_count('select 1 from meals where family_id = ' || quote_literal(:F2), 0, 'y sus comidas');
+
+-- Si se borra la cuenta del autor, sus recetas quedan en la familia, sin autor.
+select set_config('request.jwt.claim.sub', :A, true) \gset
+set local role authenticated;
+select recipe_id as ra1 from t_save(null, 'Receta de A', jsonb_build_array(t_ing(:'f_salt'))) \gset
+reset role;
+delete from auth.users where id = :A;
+select t_expect_count('select 1 from recipes where id = ' || quote_literal(:'ra1') || ' and created_by is null and family_id = ' || quote_literal(:F1), 1, 'la receta sigue en la familia, sin autor');
 
 rollback;
 \o
