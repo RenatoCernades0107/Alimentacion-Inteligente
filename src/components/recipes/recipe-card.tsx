@@ -35,7 +35,7 @@ export async function RecipeCard({
   return (
     <div className="relative">
       <Link href={`/recipes/${recipe.slug}`} className="flex gap-3 rounded-2xl border bg-card p-3 active:bg-muted">
-        <RecipeImage src={recipe.image_url} emoji={recipe.emoji} className="size-16 text-4xl" />
+        <RecipeImage src={recipe.image_url} emoji={recipe.emoji} recipeId={recipe.id} className="size-16 text-4xl" />
         <div className="min-w-0 flex-1 space-y-1">
           <span className="block pr-9 font-semibold leading-tight">{localName(recipe, locale)}</span>
           <div className="flex flex-wrap items-center gap-1.5 text-xs">

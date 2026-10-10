@@ -122,7 +122,7 @@ function MealActions({
   return (
     <>
       <DrawerHeader className="items-center text-center">
-        <RecipeImage src={meal.recipe?.image_url} emoji={meal.recipe?.emoji} className="size-20 rounded-2xl text-4xl" />
+        <RecipeImage src={meal.recipe?.image_url} emoji={meal.recipe?.emoji} recipeId={meal.recipe?.id} className="size-20 rounded-2xl text-4xl" />
         <DrawerTitle className="text-lg">{mealName(meal, locale)}</DrawerTitle>
         <p className="text-sm text-muted-foreground">
           {ts(meal.slot)}

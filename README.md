@@ -8,11 +8,13 @@ PWA para gestionar el inventario de comida de la familia y planificar sus comida
 
 | Ruta | Qué hay |
 | --- | --- |
-| `src/app/(app)/` | Pantallas: Hoy, Alimentos, Calendario, Recetas, Familia y `weight/[id]` (peso, meta y calorías de cada integrante) |
+| `src/app/(app)/` | Pantallas: Calendario (inicio, con los avisos del día), Alimentos, Chef IA, Recetas, Familia y `weight/[id]` (peso, meta y calorías de cada integrante) |
 | `src/app/actions/` | Server actions (inventario, comidas, familia, push) |
 | `src/app/api/off/` | Proxy a Open Food Facts (búsqueda y código de barras) |
 | `src/app/api/cron/daily/` | Recordatorios diarios (vencimientos, días sin comidas, comidas sin completar) |
 | `src/lib/` | Lógica: recurrencias, sugerencias, unidades, push, y el cálculo de peso y calorías (`body.ts`, `nutrition.ts`, `portions.ts`, `family-targets.ts`) |
+| `src/lib/chef*.ts`, `src/components/chef/` | Chef IA: lógica del planificador (`chef.ts`), llamada a Gemini (`chef-ai.ts`) y pantallas |
+| `src/app/api/recipes/[id]/image/` | Genera con Gemini la foto de una receta que no tiene (`src/lib/dish-image.ts`) |
 | `src/app/api/meals/[id]/portions/` | Tabla de porciones de una comida (se pide al abrirla) |
 | `supabase/tests/` | Pruebas de permisos (RLS + funciones) en SQL: `body_rls.sql`, `recipes_rls.sql` (se corren igual: sobre una base desechable con migraciones y seed aplicados) |
 | `supabase/migrations/` | Esquema, RLS (permisos padres/hijos) y funciones |
@@ -30,6 +32,21 @@ Cada integrante (con cuenta o **sin cuenta**, como un bebé) tiene una ficha en 
 - **Límites:** las kcal de los alimentos son **aproximadas** (ver abajo); no hay modo embarazo/lactancia; solo unidades métricas (kg, cm). Es orientativo y no reemplaza a un nutricionista ni a un médico.
 
 Pruebas: `npm test` (fórmulas, porciones, datos de nutrición, traducciones) y `supabase/tests/body_rls.sql` (permisos; ver el encabezado del archivo, corre sobre una base desechable con migraciones y seed aplicados).
+
+## Chef IA
+
+Pestaña central para armar el plan de comidas de hoy, mañana o la semana con Gemini:
+
+1. **Objetivo y preferencias:** bajar grasa, ganar músculo, mantener, comer más sano o energía para entrenar (a los menores no se les ofrece bajar), con chips de "con lo que tengo", "lo que vence", rápido, peruano/americano y sin carne. La meta de kcal sale de `/weight`; los macros del día se reparten según el objetivo (`GOAL_SPLIT` en `src/lib/chef.ts`).
+2. **Calibrar el gusto:** un mazo de ~12 platos con foto, kcal, macros e ingredientes en casa; se desliza → me gusta / ← paso (también con botones o flechas del teclado).
+3. **Plan:** Gemini arma el plan con esos gustos y se ve por día con un anillo de kcal y barras de proteína / carbos / grasa frente a la meta, usando la porción de quien mira (igual que el calendario). Cada plato se puede cambiar deslizando alternativas o quitar, y se conversa con el Chef ("más proteína en las cenas") con respuestas rápidas.
+4. **Al calendario:** los padres lo agregan como comidas planificadas; los hijos lo envían como propuestas (un solo aviso a los padres). Las franjas que ya tienen comida nunca se tocan.
+
+La IA solo elige recetas del catálogo visible para la familia (por slug); kcal y macros los calcula la app, y todo lo que responde se valida (`sanitizeReply`). Si Gemini no está disponible, el Chef arma un plan base con reglas (`fallbackPlan`). El borrador se guarda en el dispositivo (`localStorage`).
+
+**Macros:** proteína, carbohidratos y grasa por 100 g de cada alimento del catálogo (`macros` en `supabase/data/nutrition.mjs`, mismas fuentes que las kcal y también aproximados). Los de una receta se calculan de sus ingredientes al leerla (`macrosPerServing`), así que también funcionan para recetas propias.
+
+**Fotos de platos:** una receta sin foto (por ejemplo, una receta propia) la pide al mostrarse; el servidor la genera una sola vez con el modelo de imágenes de Gemini, la guarda en el bucket público `dish-images` y la anota en la receta (con la service role).
 
 ## Levantar en local
 

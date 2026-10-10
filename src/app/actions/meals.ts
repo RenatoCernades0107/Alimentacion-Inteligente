@@ -52,7 +52,7 @@ export async function addMeal(input: MealInput) {
     const name = session.profile.full_name ?? "";
     await notifyFamily(family.id, (locale) => {
       const t = createTranslator({ locale, messages: locale === "en" ? en : es, namespace: "push" });
-      return { title: t("proposalTitle"), body: t("proposalBody", { name }), url: `/calendar?date=${input.date}`, tag: "proposal" };
+      return { title: t("proposalTitle"), body: t("proposalBody", { name }), url: `/?date=${input.date}`, tag: "proposal" };
     }, { role: "parent" });
   } else if (input.recurrence) {
     const { data: series, error } = await supabase.from("meal_series").insert({

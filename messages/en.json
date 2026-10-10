@@ -17,9 +17,9 @@
     "yesterday": "Yesterday"
   },
   "nav": {
-    "home": "Today",
-    "inventory": "Food",
     "calendar": "Calendar",
+    "inventory": "Food",
+    "chef": "AI Chef",
     "recipes": "Recipes",
     "family": "Family"
   },
@@ -96,16 +96,17 @@
   },
   "home": {
     "hello": "Hi, {name}",
-    "todayMeals": "Today's meals",
-    "noMealsToday": "Nothing planned for today.",
-    "seeSuggestions": "See suggestions",
     "expiring": "Expiring soon",
-    "noExpiring": "Nothing expires this week. 🎉",
     "proposals": "Proposals from your kids",
     "pendingCompletion": "Unmarked meals",
     "pendingCompletionHint": "Did you cook them? Mark them as done to update the inventory.",
-    "inviteTitle": "Invite your family",
-    "profile": "My profile"
+    "profile": "My profile",
+    "proposalsPill": "{count, plural, one {# proposal} other {# proposals}}",
+    "pendingPill": "{count, plural, one {# to check off} other {# to check off}}",
+    "expiringPill": "{count, plural, one {# expiring} other {# expiring}}",
+    "expiringHint": "They expire in the next 7 days.",
+    "seeInventory": "See food",
+    "cookWithChef": "Cook with these"
   },
   "inventory": {
     "title": "Food",
@@ -341,7 +342,9 @@
     "plannedCount": "{done} of {total} planned",
     "addTo": "Add {slot}",
     "prevWeek": "Previous week",
-    "nextWeek": "Next week"
+    "nextWeek": "Next week",
+    "chefCtaTitle": "Plan this day with the AI Chef",
+    "chefCtaBody": "Pick dishes for your goal, with photos and macros."
   },
   "mealItems": {
     "title": "Ingredients",
@@ -595,7 +598,8 @@
     "weighTitle": "Time to weigh in",
     "weighBody": "Record your weight to adjust your calories.",
     "weighKidTitle": "{name}'s weight",
-    "weighKidBody": "Record their weight and height to follow their growth."
+    "weighKidBody": "Record their weight and height to follow their growth.",
+    "planProposalBody": "{name} proposed {count, plural, one {# meal} other {# meals}} with the AI Chef. Review them."
   },
   "photo": {
     "title": "Add from a photo",
@@ -778,5 +782,114 @@
     "completeAction": "Complete",
     "parentsHint": "A parent needs to complete your details to see your kcal goal.",
     "progress": "Progress toward your kcal goal: {percent}%"
+  },
+  "chef": {
+    "title": "AI Chef",
+    "restart": "Start over",
+    "hello": "Hi, {name} 👋",
+    "heroTitle": "Let's build a meal plan made for you",
+    "heroBody": "Tell me your goal, pick the dishes you crave and I'll do the rest. Then we fine-tune it together.",
+    "targetLine": "{kcal} kcal a day",
+    "targetMacros": "Protein {protein} g · Carbs {carbs} g · Fat {fat} g",
+    "completeData": "Refine",
+    "goalQuestion": "What do you want to achieve?",
+    "goal": {
+      "lose": "Lose fat",
+      "muscle": "Build muscle",
+      "maintain": "Maintain",
+      "healthy": "Eat healthier",
+      "energy": "Energy to train"
+    },
+    "goalHint": {
+      "lose": "Filling, high protein",
+      "muscle": "Protein every meal",
+      "maintain": "Balanced",
+      "healthy": "Varied, more veggies",
+      "energy": "Quality carbs"
+    },
+    "scopeQuestion": "For when?",
+    "scope": {
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "week": "Week",
+      "weekFrom": "7 days"
+    },
+    "weekRange": "Until {to}.",
+    "prefsQuestion": "Preferences",
+    "pref": {
+      "pantry": "What I have",
+      "expiring": "Expiring soon",
+      "quick": "Quick",
+      "peruvian": "Peruvian",
+      "american": "American",
+      "veggie": "Meat-free"
+    },
+    "startTaste": "Pick dishes I like",
+    "skipTaste": "Skip and build the plan now",
+    "disclaimer": "Calories and macros are approximate. This is guidance, not a substitute for a dietitian.",
+    "back": "Back",
+    "tasteTitle": "What are you craving?",
+    "tasteHint": "Swipe → if you like it, ← if not.",
+    "buildNow": "{count, plural, =0 {Build my plan} one {Build my plan with # favorite} other {Build my plan with # favorites}}",
+    "tasteMore": "{count, plural, one {Pick # more to start} other {Pick # more to start}}",
+    "deckRole": "swipeable card",
+    "like": "Like",
+    "pass": "Nope",
+    "pick": "This one",
+    "haveCount": "{have}/{total} at home",
+    "usesExpiring": "Uses expiring food",
+    "noMeat": "Meat-free",
+    "macro": {
+      "protein": "P",
+      "carbs": "C",
+      "fat": "F",
+      "proteinLong": "Protein",
+      "carbsLong": "Carbs",
+      "fatLong": "Fat"
+    },
+    "ofKcal": "of {target}",
+    "buildPrompt": "Build my plan with what I picked.",
+    "offlineMessage": "I couldn't reach the Chef right now. You can swap dishes with “Swap” or try again in a bit.",
+    "offlineBuilt": "The Chef isn't available right now, so I built a starter plan from your picks and goal. You can swap any dish.",
+    "updatedCount": "{count, plural, one {Changed # meal} other {Changed # meals}}",
+    "error": "Something went wrong. Please try again.",
+    "estimatedTarget": "Reference target of 2000 kcal: add your weight and height for an exact target.",
+    "busy": "Already in your calendar: {name}",
+    "pickDish": "Pick a dish",
+    "rebuild": "Build the plan",
+    "chatTitle": "Conversation",
+    "thinking": "The Chef is thinking",
+    "applyCta": "{count, plural, one {Add # meal to the calendar} other {Add # meals to the calendar}}",
+    "emptyLeft": "{count, plural, one {# open} other {# open}}",
+    "qr": {
+      "moreProtein": "More protein 💪",
+      "lighter": "Something lighter",
+      "quicker": "Quicker to cook",
+      "moreVeggies": "More veggies 🥦"
+    },
+    "placeholder": "Ask the Chef…",
+    "send": "Send",
+    "altTitle": "Options for {slot} on {day}",
+    "altHint": "Swipe → to pick, ← to see another.",
+    "picked": "Done: {name}",
+    "altEmpty": "I'm out of options for your preferences.",
+    "moreIdeas": "Give me more options for {slot} on {day}.",
+    "askChef": "Ask the Chef for ideas",
+    "appliedTitle": "{count, plural, one {# meal in your calendar!} other {# meals in your calendar!}}",
+    "proposedTitle": "{count, plural, one {Proposal sent!} other {# proposals sent!}}",
+    "appliedBody": "We'll remind you to check them off so ingredients are deducted.",
+    "proposedBody": "Your parents will see them to accept.",
+    "skipped": "{count, plural, one {# slot was already taken, so I skipped it.} other {# slots were already taken, so I skipped them.}}",
+    "seeCalendar": "See in the calendar",
+    "applyTitle": "Add to the calendar?",
+    "proposeTitle": "Send to your parents?",
+    "applyBody": "{count, plural, one {# meal will be added.} other {# meals will be added.}}",
+    "proposeBody": "{count, plural, one {# proposal will be sent.} other {# proposals will be sent.}}",
+    "applying": "Adding…",
+    "applyConfirm": "Add to calendar",
+    "proposeConfirm": "Send proposals",
+    "servingNote": "{portion} serv. · {kcal} kcal for you",
+    "remove": "Remove",
+    "swap": "Swap dish"
   }
 }

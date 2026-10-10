@@ -12,6 +12,10 @@ export type FoodNutrition = {
   g_per_unit: number | null;
   /** Gramos por ml (densidad); 1 si se omite. */
   g_per_ml: number | null;
+  /** Macronutrientes por 100 g; null u omitidos = sin dato (alimentos propios). */
+  protein_100g?: number | null;
+  carbs_100g?: number | null;
+  fat_100g?: number | null;
 };
 
 export type NutritionItem = {
@@ -78,6 +82,52 @@ export function kcalPerServing(items: NutritionItem[], servings: number) {
   const { kcal, optionalKcal, complete } = itemsKcal(items);
   const n = Math.max(1, servings);
   return { kcal: Math.round(kcal / n), optionalKcal: Math.round(optionalKcal / n), complete };
+}
+
+// ───────────────────────────────────────── Macronutrientes ──────────────────────────────────────
+
+export type Macros = { protein: number; carbs: number; fat: number };
+
+/**
+ * Gramos de proteína, carbohidratos y grasa de un ingrediente. Sin cantidad suma 0; `null` si falta
+ * el dato del alimento o no se puede pasar a gramos.
+ */
+export function ingredientMacros(item: NutritionItem): Macros | null {
+  if (item.quantity == null || item.unit == null) return { protein: 0, carbs: 0, fat: 0 };
+  const { protein_100g: p, carbs_100g: c, fat_100g: f } = item.food;
+  if (p == null || c == null || f == null) return null;
+  const grams = toGrams(item.food, item.quantity, item.unit);
+  if (grams == null) return null;
+  return { protein: (grams * p) / 100, carbs: (grams * c) / 100, fat: (grams * f) / 100 };
+}
+
+/**
+ * Macros por porción de una receta con los ingredientes obligatorios (como las kcal), redondeados al
+ * gramo. `complete` es false si a algún obligatorio le falta el dato.
+ */
+export function macrosPerServing(items: NutritionItem[], servings: number): Macros & { complete: boolean } {
+  const total = { protein: 0, carbs: 0, fat: 0 };
+  let complete = true;
+  for (const item of items) {
+    if (item.optional) continue;
+    const m = ingredientMacros(item);
+    if (!m) {
+      complete = false;
+      continue;
+    }
+    total.protein += m.protein;
+    total.carbs += m.carbs;
+    total.fat += m.fat;
+  }
+  const n = Math.max(1, servings);
+  return { protein: Math.round(total.protein / n), carbs: Math.round(total.carbs / n), fat: Math.round(total.fat / n), complete };
+}
+
+/** Parte de las kcal que aporta cada macro (4 / 4 / 9 kcal por gramo), en fracciones que suman 1. */
+export function macroSplit({ protein, carbs, fat }: Macros): Macros {
+  const kcal = protein * 4 + carbs * 4 + fat * 9;
+  if (kcal <= 0) return { protein: 0, carbs: 0, fat: 0 };
+  return { protein: (protein * 4) / kcal, carbs: (carbs * 4) / kcal, fat: (fat * 9) / kcal };
 }
 
 // ─────────────────────────────────────── Reparto por franja ─────────────────────────────────────
