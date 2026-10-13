@@ -56,7 +56,7 @@ export function HomeMeals({
           </li>
         ))}
       </ul>
-      <MealActionsDrawer meal={selected} today={today} isParent={isParent} onClose={() => setSelected(null)} onEdit={(m) => router.push(`/calendar?date=${m.date}`)} />
+      <MealActionsDrawer meal={selected} today={today} isParent={isParent} onClose={() => setSelected(null)} onEdit={(m) => router.push(`/?date=${m.date}`)} />
     </>
   );
 }

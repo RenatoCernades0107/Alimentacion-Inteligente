@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { foods } from "../supabase/data/foods.mjs";
-import { nutrition } from "../supabase/data/nutrition.mjs";
+import { macros, nutrition } from "../supabase/data/nutrition.mjs";
 import { recipes } from "../supabase/data/recipes.mjs";
-import { kcalPerServing, type NutritionItem } from "../src/lib/nutrition";
+import { kcalPerServing, macrosPerServing, type NutritionItem } from "../src/lib/nutrition";
 
 // Las tablas .mjs no tienen tipos: se declaran aquí.
 type FoodTuple = [key: string, es: string, en: string, category: string, emoji: string, img: string | null, days: number, unit: "unit" | "g" | "kg" | "ml" | "l", aliases: string[]];
@@ -11,6 +11,7 @@ type Recipe = { slug: string; servings: number; ing: [string, number, boolean?][
 const foodList = foods as unknown as FoodTuple[];
 const recipeList = recipes as unknown as Recipe[];
 const table = nutrition as unknown as Record<string, [number, (number | null)?, (number | null)?]>;
+const macroTable = macros as unknown as Record<string, [number, number, number]>;
 const unitOf = new Map(foodList.map((f) => [f[0], f[7]]));
 
 const items = (r: Recipe): NutritionItem[] =>
@@ -18,7 +19,14 @@ const items = (r: Recipe): NutritionItem[] =>
     quantity,
     unit: unitOf.get(key) ?? null,
     optional: !!optional,
-    food: { kcal_100g: table[key]?.[0] ?? null, g_per_unit: table[key]?.[1] ?? null, g_per_ml: table[key]?.[2] ?? null },
+    food: {
+      kcal_100g: table[key]?.[0] ?? null,
+      g_per_unit: table[key]?.[1] ?? null,
+      g_per_ml: table[key]?.[2] ?? null,
+      protein_100g: macroTable[key]?.[0] ?? null,
+      carbs_100g: macroTable[key]?.[1] ?? null,
+      fat_100g: macroTable[key]?.[2] ?? null,
+    },
   }));
 
 describe("nutrición del catálogo", () => {
@@ -45,6 +53,23 @@ describe("nutrición del catálogo", () => {
   });
 });
 
+describe("macros del catálogo", () => {
+  it("cada alimento tiene sus macros y no sobra ninguno", () => {
+    expect(Object.keys(table).filter((k) => !macroTable[k])).toEqual([]);
+    expect(Object.keys(macroTable).filter((k) => !table[k])).toEqual([]);
+  });
+
+  it("cuadran con las kcal (4·P + 4·C + 9·G)", () => {
+    // El extracto de vainilla debe sus kcal al alcohol.
+    for (const [key, [p, c, f]] of Object.entries(macroTable)) {
+      expect(p + c + f, key).toBeLessThanOrEqual(100);
+      if (key === "vanilla") continue;
+      const kcal = table[key][0];
+      expect(Math.abs(4 * p + 4 * c + 9 * f - kcal), key).toBeLessThanOrEqual(Math.max(40, 0.35 * kcal));
+    }
+  });
+});
+
 describe("kcal de las recetas", () => {
   const rows = recipeList.map((r) => ({ slug: r.slug, ...kcalPerServing(items(r), r.servings) }));
 
@@ -54,6 +79,15 @@ describe("kcal de las recetas", () => {
       expect(r.complete, `${r.slug} incompleta`).toBe(true);
       expect(r.kcal, r.slug).toBeGreaterThanOrEqual(100);
       expect(r.kcal, r.slug).toBeLessThanOrEqual(1300);
+    }
+  });
+
+  it("los macros de cada receta están completos y cuadran con sus kcal", () => {
+    for (const r of recipeList) {
+      const m = macrosPerServing(items(r), r.servings);
+      const kcal = kcalPerServing(items(r), r.servings).kcal;
+      expect(m.complete, r.slug).toBe(true);
+      expect(Math.abs(4 * m.protein + 4 * m.carbs + 9 * m.fat - kcal), r.slug).toBeLessThanOrEqual(Math.max(60, 0.2 * kcal));
     }
   });
 

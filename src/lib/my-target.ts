@@ -14,6 +14,13 @@ export type MyTarget = {
   state: "ok" | "incomplete" | "infant";
   /** El usuario puede completar/editar sus propios datos (los hijos menores no: los edita un padre). */
   canEdit: boolean;
+  /** Hacia dónde va su meta de peso (adultos con meta); null si no hay plan. */
+  direction?: "lose" | "gain" | "maintain" | null;
+  /** Peso usado en el cálculo y meta, en kg (para dar contexto al Chef IA). */
+  weightKg?: number | null;
+  goalKg?: number | null;
+  /** Menor de 18: nunca se le ofrecen objetivos de bajar de peso. */
+  minor?: boolean;
 };
 
 /**
@@ -49,5 +56,13 @@ export async function loadMyTarget(supabase: SupabaseClient, userId: string, tim
   }
 
   const target = dailyTarget(toBodyData(body as BodyRow), toLogPoints(logs), today);
-  return { kcal: target.kcal, state: target.status, canEdit };
+  return {
+    kcal: target.kcal,
+    state: target.status,
+    canEdit,
+    direction: target.plan?.direction ?? null,
+    weightKg: target.weightKg,
+    goalKg: target.plan?.goalKg ?? null,
+    minor: target.age ? target.age.years < 18 : false,
+  };
 }

@@ -71,7 +71,7 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
       </div>
 
       <div className="flex flex-col items-center gap-2 py-4 text-center">
-        <RecipeImage src={recipe.image_url} emoji={recipe.emoji} alt={localName(recipe, locale)} className="aspect-[4/3] h-auto w-full max-w-sm rounded-3xl text-6xl" />
+        <RecipeImage src={recipe.image_url} emoji={recipe.emoji} recipeId={recipe.id} alt={localName(recipe, locale)} className="aspect-[4/3] h-auto w-full max-w-sm rounded-3xl text-6xl" />
         {credit && (
           <a href={credit.page} target="_blank" rel="noreferrer" className="-mt-1 max-w-sm truncate text-xs text-muted-foreground">
             {t("photoCredit", { author: credit.author, license: credit.license })}

@@ -42,6 +42,10 @@ export type Food = {
   g_per_unit: number | null;
   /** Gramos por ml (densidad). */
   g_per_ml: number;
+  /** Macronutrientes por 100 g (mismo estado que kcal_100g); null = sin dato. */
+  protein_100g: number | null;
+  carbs_100g: number | null;
+  fat_100g: number | null;
 };
 
 export type InventoryItem = {

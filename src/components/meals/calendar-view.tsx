@@ -57,7 +57,7 @@ export function CalendarView({
   const [pickerOpen, setPickerOpen] = useState(false);
   const touchX = useRef<number | null>(null);
 
-  const go = (d: string) => router.push(`/calendar?date=${d}`, { scroll: false });
+  const go = (d: string) => router.push(`/?date=${d}`, { scroll: false });
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const dayFmt = new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
@@ -115,7 +115,7 @@ export function CalendarView({
           if (Math.abs(dx) > 50) go(addDays(date, dx < 0 ? 7 : -7));
         }}
       >
-        <Link href={`/calendar?date=${addDays(date, -7)}`} scroll={false} className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "rounded-full text-emerald-700")} aria-label={t("prevWeek")}>
+        <Link href={`/?date=${addDays(date, -7)}`} scroll={false} className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "rounded-full text-emerald-700")} aria-label={t("prevWeek")}>
           <ChevronLeft />
         </Link>
         <div className="grid flex-1 grid-cols-7 gap-0.5">
@@ -125,7 +125,7 @@ export function CalendarView({
             return (
               <Link
                 key={d}
-                href={`/calendar?date=${d}`}
+                href={`/?date=${d}`}
                 scroll={false}
                 aria-current={isSel ? "date" : undefined}
                 className={cn(
@@ -153,7 +153,7 @@ export function CalendarView({
             );
           })}
         </div>
-        <Link href={`/calendar?date=${addDays(date, 7)}`} scroll={false} className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "rounded-full text-emerald-700")} aria-label={t("nextWeek")}>
+        <Link href={`/?date=${addDays(date, 7)}`} scroll={false} className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "rounded-full text-emerald-700")} aria-label={t("nextWeek")}>
           <ChevronRight />
         </Link>
       </div>
@@ -174,6 +174,21 @@ export function CalendarView({
 
       {/* Progreso de la meta de kcal del día */}
       <DayGoal meals={dayMeals} myKcal={myKcal} state={myState} canEdit={canEditData} mealsPerDay={mealsPerDay} />
+
+      {/* Día vacío: invitación a armarlo con el Chef IA */}
+      {dayMeals.length === 0 && date >= today && (
+        <Link
+          href={`/chef?date=${date}`}
+          className="mt-4 flex items-center gap-3 rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 p-3.5 text-white shadow-lg shadow-fuchsia-600/20 transition-transform active:scale-[0.98]"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xl">✨</span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{t("chefCtaTitle")}</span>
+            <span className="block text-sm text-white/85">{t("chefCtaBody")}</span>
+          </span>
+          <ChevronRight className="size-5 shrink-0" />
+        </Link>
+      )}
 
       {/* Línea de tiempo por franja */}
       <ol className="relative mt-4 space-y-4 before:absolute before:top-4 before:bottom-4 before:left-[15px] before:w-0.5 before:rounded-full before:bg-border">
@@ -214,7 +229,7 @@ export function CalendarView({
                         )}
                       >
                         <span className="relative">
-                          <RecipeImage src={m.recipe?.image_url} emoji={m.recipe?.emoji} className={cn("size-14 rounded-xl text-2xl", m.status === "completed" && "opacity-50")} />
+                          <RecipeImage src={m.recipe?.image_url} emoji={m.recipe?.emoji} recipeId={m.recipe?.id} className={cn("size-14 rounded-xl text-2xl", m.status === "completed" && "opacity-50")} />
                           {m.status === "completed" && (
                             <span className="absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-card">
                               <Check className="size-3" strokeWidth={3} />

@@ -4,6 +4,8 @@ import {
   ingredientKcal,
   itemsKcal,
   kcalPerServing,
+  macroSplit,
+  macrosPerServing,
   portionFor,
   slotShare,
   suggestedScale,
@@ -59,6 +61,34 @@ describe("kcal de una receta", () => {
   it("divide entre las porciones", () => {
     expect(kcalPerServing(items, 4).kcal).toBe(Math.round(1726 / 4));
     expect(kcalPerServing(items, 0).kcal).toBe(1726);
+  });
+});
+
+describe("macros de una receta", () => {
+  const eggM: FoodNutrition = { ...egg, protein_100g: 12.6, carbs_100g: 0.7, fat_100g: 9.5 };
+  const riceM: FoodNutrition = { ...rice, protein_100g: 7, carbs_100g: 79, fat_100g: 0.7 };
+  const oilM: FoodNutrition = { ...oil, protein_100g: 0, carbs_100g: 0, fat_100g: 100 };
+  const items = [
+    { quantity: 0.4, unit: "kg" as const, optional: false, food: riceM },
+    { quantity: 4, unit: "unit" as const, optional: false, food: eggM },
+    { quantity: 0.05, unit: "l" as const, optional: true, food: oilM },
+  ];
+
+  it("suma los obligatorios y divide entre las porciones", () => {
+    // arroz 400 g: 28 / 316 / 2.8 · huevos 200 g: 25.2 / 1.4 / 19
+    expect(macrosPerServing(items, 4)).toEqual({ protein: 13, carbs: 79, fat: 5, complete: true });
+  });
+
+  it("es incompleta si a un obligatorio le faltan los macros", () => {
+    expect(macrosPerServing([...items, { quantity: 50, unit: "g", optional: false, food: rice }], 4).complete).toBe(false);
+    expect(macrosPerServing([...items, { quantity: 50, unit: "g", optional: true, food: rice }], 4).complete).toBe(true);
+  });
+
+  it("reparte las kcal entre los macros", () => {
+    const s = macroSplit({ protein: 25, carbs: 50, fat: 0 });
+    expect(s.protein).toBeCloseTo(1 / 3, 6);
+    expect(s.carbs).toBeCloseTo(2 / 3, 6);
+    expect(macroSplit({ protein: 0, carbs: 0, fat: 0 })).toEqual({ protein: 0, carbs: 0, fat: 0 });
   });
 });
 
