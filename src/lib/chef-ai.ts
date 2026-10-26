@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { getClient, jsonSchema, parseJsonReply, requireModel } from "./ai";
+import { completeJson, requireModel } from "./ai";
 import { parseSlotKey, type ChatMessage, type ChefPrefs, type DayTargets, type DishCard, type Plan, type RawReply } from "./chef";
 import type { MealSlot } from "./types";
 
@@ -151,17 +151,19 @@ ${ctx.cards.map(catalogLine).join("\n")}`;
 
 /** Un turno del Chef IA. Lanza si no hay llave o la respuesta no es válida (quien llama usa el respaldo). */
 export async function askChef(ctx: ChefContext, history: ChatMessage[]): Promise<RawReply> {
-  const completion = await getClient().chat.completions.create({
+  const reply = await completeJson({
     model: requireModel("INFERHUB_CHAT_MODEL"),
     messages: [
       { role: "system", content: systemPrompt(ctx) },
       ...history.map((m) => ({ role: m.role === "model" ? ("assistant" as const) : ("user" as const), content: m.text })),
     ],
-    response_format: jsonSchema("chef_reply", RESPONSE_SCHEMA),
+    name: "chef_reply",
+    schema: RESPONSE_SCHEMA,
     temperature: 0.8,
+    reasoningEffort: "low",
   });
 
-  const parsed = ReplySchema.safeParse(parseJsonReply(completion));
+  const parsed = ReplySchema.safeParse(reply);
   if (!parsed.success) throw new Error("invalid chef response");
   return parsed.data as RawReply;
 }
