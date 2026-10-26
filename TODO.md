@@ -75,12 +75,12 @@ Ver [specs.md](specs.md) para los requerimientos y [README.md](README.md) para l
 - [x] El calendario es la pantalla de inicio; propuestas, comidas sin marcar y por vencer como píldoras arriba (`/calendar` redirige)
 - [x] Macros por 100 g en los 284 alimentos y por porción en las recetas (calculados de los ingredientes)
 - [x] Chef IA: objetivo → calibrar gusto deslizando platos → plan por día con kcal y macros vs. meta → chat → al calendario
-- [x] Plan de respaldo sin IA y validación de las respuestas de Gemini (`src/lib/chef.test.ts`)
-- [ ] Probar el Chef con la llave real de Gemini y ajustar el prompt con conversaciones reales
+- [x] Plan de respaldo sin IA y validación de las respuestas de la IA (`src/lib/chef.test.ts`)
+- [ ] Probar el Chef con la llave real de InferHub y ajustar el prompt con conversaciones reales
 - [ ] Límite de uso del Chef por familia (hoy solo se limita el largo de los mensajes y del historial)
 
 ## 9. Pendiente
 - [ ] Levantar Supabase (local o en la nube) y probar el flujo completo de punta a punta
 - [ ] Configurar credenciales de Google OAuth
 - [ ] Deploy (Vercel + Supabase) y probar en iPhone real
-- [x] Fotos para las recetas: las del catálogo en `public/recipes`; las propias se generan con Gemini al mostrarse
+- [x] Fotos para las recetas: las del catálogo en `public/recipes`; las propias se generan con IA al mostrarse

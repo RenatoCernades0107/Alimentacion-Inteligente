@@ -7,7 +7,7 @@ import { loadChefData } from "@/lib/chef-data";
 import { defaultGoal } from "@/lib/chef";
 import { ChefView } from "@/components/chef/chef-view";
 
-/** Chef IA: arma el plan de comidas conversando con Gemini y eligiendo platos. */
+/** Chef IA: arma el plan de comidas conversando con IA y eligiendo platos. */
 export default async function ChefPage({ searchParams }: PageProps<"/chef">) {
   const { date, use } = await searchParams;
   const { supabase, family, profile, isParent, user } = await requireMember();

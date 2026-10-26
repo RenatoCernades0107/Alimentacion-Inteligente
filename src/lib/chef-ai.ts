@@ -1,54 +1,52 @@
 import "server-only";
-import { GoogleGenAI, ThinkingLevel, Type, type Content, type Schema } from "@google/genai";
 import { z } from "zod";
+import { getClient, jsonSchema, parseJsonReply, requireModel } from "./ai";
 import { parseSlotKey, type ChatMessage, type ChefPrefs, type DayTargets, type DishCard, type Plan, type RawReply } from "./chef";
 import type { MealSlot } from "./types";
 
-const RESPONSE_SCHEMA: Schema = {
-  type: Type.OBJECT,
+const RESPONSE_SCHEMA = {
+  type: "object",
   properties: {
-    message: { type: Type.STRING, description: "Respuesta breve y cálida para el usuario (2–4 frases, sin listas largas ni markdown pesado)." },
+    message: { type: "string", description: "Respuesta breve y cálida para el usuario (2–4 frases, sin listas largas ni markdown pesado)." },
     quick_replies: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
+      type: "array",
+      items: { type: "string" },
       description: "2 a 4 respuestas rápidas (máx. 40 caracteres) que el usuario podría tocar a continuación.",
     },
     plan: {
-      type: Type.ARRAY,
+      type: "array",
       description: "Franjas que pones o cambias en el plan. Solo las que cambian.",
       items: {
-        type: Type.OBJECT,
+        type: "object",
         properties: {
-          date: { type: Type.STRING, description: "YYYY-MM-DD" },
-          slot: { type: Type.STRING },
-          slug: { type: Type.STRING, description: "slug exacto de una receta del catálogo" },
-          reason: { type: Type.STRING, nullable: true, description: "Por qué este plato (máx. 90 caracteres), ligado al objetivo o a lo que hay en casa." },
+          date: { type: "string", description: "YYYY-MM-DD" },
+          slot: { type: "string" },
+          slug: { type: "string", description: "slug exacto de una receta del catálogo" },
+          reason: { type: ["string", "null"], description: "Por qué este plato (máx. 90 caracteres), ligado al objetivo o a lo que hay en casa." },
         },
         required: ["date", "slot", "slug"],
-        propertyOrdering: ["date", "slot", "slug", "reason"],
       },
     },
     remove: {
-      type: Type.ARRAY,
+      type: "array",
       description: "Franjas que el usuario pidió vaciar.",
       items: {
-        type: Type.OBJECT,
-        properties: { date: { type: Type.STRING }, slot: { type: Type.STRING } },
+        type: "object",
+        properties: { date: { type: "string" }, slot: { type: "string" } },
         required: ["date", "slot"],
       },
     },
     alternatives: {
-      type: Type.OBJECT,
-      nullable: true,
+      type: ["object", "null"],
       description: "Solo si el usuario pide opciones para UNA franja: 3 a 5 platos para elegir.",
       properties: {
-        date: { type: Type.STRING },
-        slot: { type: Type.STRING },
+        date: { type: "string" },
+        slot: { type: "string" },
         options: {
-          type: Type.ARRAY,
+          type: "array",
           items: {
-            type: Type.OBJECT,
-            properties: { slug: { type: Type.STRING }, reason: { type: Type.STRING, nullable: true } },
+            type: "object",
+            properties: { slug: { type: "string" }, reason: { type: ["string", "null"] } },
             required: ["slug"],
           },
         },
@@ -57,7 +55,6 @@ const RESPONSE_SCHEMA: Schema = {
     },
   },
   required: ["message", "quick_replies", "plan"],
-  propertyOrdering: ["message", "plan", "remove", "alternatives", "quick_replies"],
 };
 
 const ReplySchema = z.object({
@@ -154,24 +151,17 @@ ${ctx.cards.map(catalogLine).join("\n")}`;
 
 /** Un turno del Chef IA. Lanza si no hay llave o la respuesta no es válida (quien llama usa el respaldo). */
 export async function askChef(ctx: ChefContext, history: ChatMessage[]): Promise<RawReply> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-  const ai = new GoogleGenAI({ apiKey });
-
-  const contents: Content[] = history.map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
-  const response = await ai.models.generateContent({
-    model: process.env.GEMINI_CHAT_MODEL || "gemini-3-flash-preview",
-    contents,
-    config: {
-      systemInstruction: systemPrompt(ctx),
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      temperature: 0.8,
-    },
+  const completion = await getClient().chat.completions.create({
+    model: requireModel("INFERHUB_CHAT_MODEL"),
+    messages: [
+      { role: "system", content: systemPrompt(ctx) },
+      ...history.map((m) => ({ role: m.role === "model" ? ("assistant" as const) : ("user" as const), content: m.text })),
+    ],
+    response_format: jsonSchema("chef_reply", RESPONSE_SCHEMA),
+    temperature: 0.8,
   });
 
-  const parsed = ReplySchema.safeParse(JSON.parse(response.text ?? "{}"));
+  const parsed = ReplySchema.safeParse(parseJsonReply(completion));
   if (!parsed.success) throw new Error("invalid chef response");
   return parsed.data as RawReply;
 }
