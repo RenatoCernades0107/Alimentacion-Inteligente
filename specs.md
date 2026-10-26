@@ -11,7 +11,7 @@ App PWA (inicialmente para celular) optimizada para iPhone, cuya misión es gest
    - La cantidad se puede editar a mano, pero se descuenta automáticamente cuando un padre marca una comida como completada.
 
 2. **Comidas sugeridas.** El usuario puede ver y seleccionar las comidas sugeridas por la app.
-   - Las sugerencias usan reglas simples (el Chef IA, punto 10, usa Gemini).
+   - Las sugerencias usan reglas simples (el Chef IA, punto 10, usa InferHub).
    - El usuario elige entre dos modos: "solo con lo que tengo" o "cualquier comida". En ambos se priorizan las comidas que más ingredientes comparten con el inventario y las que usan alimentos próximos a vencer.
    - El usuario puede filtrar las comidas por país de origen (por ahora **Perú** y **USA**). Cualquier usuario puede ver comidas de cualquier país.
 
@@ -50,7 +50,7 @@ App PWA (inicialmente para celular) optimizada para iPhone, cuya misión es gest
    - Cada comida muestra además la porción y las kcal de quien la mira, y el calendario tiene una barra con el avance de su meta de kcal del día (lo completado y lo planificado). Las comidas de una misma franja se reparten las kcal de esa franja.
    - Si la familia necesita más o menos porciones que las que rinde la receta, la app sugiere el multiplicador y, al ajustarlo, el inventario se descuenta con las cantidades ajustadas.
 
-10. **Chef IA.** Un chat con IA (Gemini) ayuda a armar el plan del día o de la semana según el objetivo de la persona (bajar grasa, ganar músculo, mantener, comer más sano, energía para entrenar).
+10. **Chef IA.** Un chat con IA (InferHub) ayuda a armar el plan del día o de la semana según el objetivo de la persona (bajar grasa, ganar músculo, mantener, comer más sano, energía para entrenar).
    - Muestra los platos con foto, kcal y macros (proteína, carbohidratos, grasa) y se eligen deslizando lo que gusta.
    - El plan muestra por día las kcal y los macros frente a la meta; se ajusta conversando o cambiando platos, y se pasa al calendario (los hijos lo envían como propuestas).
    - Solo usa recetas del catálogo de la familia; las recetas sin foto obtienen una generada con IA.

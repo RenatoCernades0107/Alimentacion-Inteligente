@@ -5,7 +5,7 @@
  * - Objetivos y metas de macros del día.
  * - Tarjetas de platos (kcal, macros, ingredientes en casa) a partir de las recetas.
  * - Puntaje de cada plato según el objetivo y las preferencias; mazo para "calibrar tu gusto".
- * - Plan de respaldo sin IA (si Gemini no responde) y validación de lo que propone la IA.
+ * - Plan de respaldo sin IA (si la IA no responde) y validación de lo que propone la IA.
  */
 import { addDays } from "./dates";
 import { mealTypeForSlot } from "./meals";

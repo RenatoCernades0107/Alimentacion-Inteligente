@@ -1,6 +1,6 @@
 import "server-only";
-import { GoogleGenAI, MediaResolution, ThinkingLevel, Type, type Schema } from "@google/genai";
 import { z } from "zod";
+import { getClient, jsonSchema, parseJsonReply, requireModel } from "./ai";
 import type { PhotoMode } from "./photo";
 
 /** Alimento del catálogo que se le muestra al modelo para que haga el match. */
@@ -25,32 +25,30 @@ const ResultSchema = z.object({ items: z.array(ItemSchema) });
 
 export type VisionItem = z.infer<typeof ItemSchema>;
 
-const RESPONSE_SCHEMA: Schema = {
-  type: Type.OBJECT,
+const RESPONSE_SCHEMA = {
+  type: "object",
   properties: {
     items: {
-      type: Type.ARRAY,
+      type: "array",
       items: {
-        type: Type.OBJECT,
+        type: "object",
         properties: {
-          raw_text: { type: Type.STRING, description: "Texto tal cual en la boleta, o descripción breve de lo que se ve en la foto." },
-          name: { type: Type.STRING, description: "Nombre normalizado en español, sin marca ni tamaño. Ej: \"Leche evaporada\"." },
-          brand: { type: Type.STRING, nullable: true, description: "Marca si se conoce (GLORIA, LAIVE, BELL'S…)." },
+          raw_text: { type: "string", description: "Texto tal cual en la boleta, o descripción breve de lo que se ve en la foto." },
+          name: { type: "string", description: "Nombre normalizado en español, sin marca ni tamaño. Ej: \"Leche evaporada\"." },
+          brand: { type: ["string", "null"], description: "Marca si se conoce (GLORIA, LAIVE, BELL'S…)." },
           search_query: {
-            type: Type.STRING,
-            nullable: true,
+            type: ["string", "null"],
             description: "Solo para productos de marca: palabras para buscarlo en un supermercado peruano, sin abreviaturas ni tamaño. Ej: \"leche evaporada gloria\".",
           },
-          food_ref: { type: Type.STRING, nullable: true, description: "ref del catálogo que corresponde a este alimento, o null si ninguno encaja." },
-          count: { type: Type.NUMBER, description: "Cuántos paquetes o piezas. 1 si es un producto a granel pesado." },
-          size: { type: Type.NUMBER, nullable: true, description: "Contenido de cada paquete, o el peso total si es a granel. null si no se sabe." },
-          size_unit: { type: Type.STRING, nullable: true, enum: [...UNIT_VALUES], description: "Unidad de size." },
-          packaged: { type: Type.BOOLEAN, description: "true si es un producto envasado de marca." },
-          confidence: { type: Type.STRING, enum: ["high", "medium", "low"] },
-          emoji: { type: Type.STRING, nullable: true, description: "Un emoji que represente al alimento." },
+          food_ref: { type: ["string", "null"], description: "ref del catálogo que corresponde a este alimento, o null si ninguno encaja." },
+          count: { type: "number", description: "Cuántos paquetes o piezas. 1 si es un producto a granel pesado." },
+          size: { type: ["number", "null"], description: "Contenido de cada paquete, o el peso total si es a granel. null si no se sabe." },
+          size_unit: { type: ["string", "null"], enum: [...UNIT_VALUES, null], description: "Unidad de size." },
+          packaged: { type: "boolean", description: "true si es un producto envasado de marca." },
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
+          emoji: { type: ["string", "null"], description: "Un emoji que represente al alimento." },
         },
         required: ["raw_text", "name", "count", "packaged", "confidence"],
-        propertyOrdering: ["raw_text", "name", "brand", "search_query", "food_ref", "count", "size", "size_unit", "packaged", "confidence", "emoji"],
       },
     },
   },
@@ -84,33 +82,24 @@ function systemPrompt(mode: PhotoMode, catalog: CatalogEntry[]) {
   return `${COMMON_RULES}\n\n${MODE_RULES[mode]}\n\nCatálogo (ref | nombre | alias):\n${lines.join("\n")}`;
 }
 
-/** Pide a Gemini que liste los alimentos de una foto o boleta. */
+/** Pide al modelo de visión que liste los alimentos de una foto o boleta. */
 export async function analyzeImage(input: { mode: PhotoMode; base64: string; mimeType: string; catalog: CatalogEntry[] }): Promise<VisionItem[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-  const ai = new GoogleGenAI({ apiKey });
-
-  const response = await ai.models.generateContent({
-    model: process.env.GEMINI_MODEL || "gemini-3.1-pro-preview",
-    contents: [
+  const completion = await getClient().chat.completions.create({
+    model: requireModel("INFERHUB_VISION_MODEL"),
+    messages: [
+      { role: "system", content: systemPrompt(input.mode, input.catalog) },
       {
         role: "user",
-        parts: [
-          { inlineData: { data: input.base64, mimeType: input.mimeType } },
-          { text: input.mode === "receipt" ? "Lista los alimentos de esta boleta." : "Lista los alimentos de esta foto." },
+        content: [
+          { type: "image_url", image_url: { url: `data:${input.mimeType};base64,${input.base64}`, detail: "high" } },
+          { type: "text", text: input.mode === "receipt" ? "Lista los alimentos de esta boleta." : "Lista los alimentos de esta foto." },
         ],
       },
     ],
-    config: {
-      systemInstruction: systemPrompt(input.mode, input.catalog),
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-      mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-    },
+    response_format: jsonSchema("food_items", RESPONSE_SCHEMA),
   });
 
-  const parsed = ResultSchema.safeParse(JSON.parse(response.text ?? "{}"));
+  const parsed = ResultSchema.safeParse(parseJsonReply(completion));
   if (!parsed.success) throw new Error("invalid vision response");
   return parsed.data.items;
 }

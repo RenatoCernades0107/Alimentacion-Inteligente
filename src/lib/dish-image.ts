@@ -1,6 +1,6 @@
 import "server-only";
-import { GoogleGenAI, Modality } from "@google/genai";
 import sharp from "sharp";
+import { getClient, hasAi } from "@/lib/ai";
 import { createAdminClient } from "@/lib/supabase/server";
 
 const BUCKET = "dish-images";
@@ -10,7 +10,7 @@ const LOCK_MINUTES = 3;
 type RecipeForImage = { id: string; name_es: string; name_en: string; description_es: string | null; image_url: string | null };
 
 /**
- * Foto del plato de una receta: si no tiene, la genera con el modelo de imágenes de Gemini, la guarda
+ * Foto del plato de una receta: si no tiene, la genera con el modelo de imágenes de InferHub, la guarda
  * como WebP en el bucket público `dish-images` y la anota en `recipes.image_url` (con la service role:
  * los usuarios no pueden escribir recetas directamente). Devuelve la URL o null si no se pudo.
  *
@@ -18,8 +18,7 @@ type RecipeForImage = { id: string; name_es: string; name_en: string; descriptio
  * `image_requested_at` hace de candado para no generar dos fotos de la misma receta a la vez.
  */
 export async function ensureDishImage(recipeId: string, ingredientNames: string[]): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (!hasAi() || !process.env.INFERHUB_IMAGE_MODEL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null;
   const admin = createAdminClient();
 
   const { data: claimed } = await admin
@@ -37,7 +36,7 @@ export async function ensureDishImage(recipeId: string, ingredientNames: string[
   }
 
   try {
-    const png = await generate(new GoogleGenAI({ apiKey }), claimed as RecipeForImage, ingredientNames);
+    const png = await generate(claimed as RecipeForImage, ingredientNames);
     const webp = await sharp(png).resize(768, 768, { fit: "cover" }).webp({ quality: 80 }).toBuffer();
     const file = `${recipeId}-${Date.now().toString(36)}.webp`;
     const { error } = await admin.storage.from(BUCKET).upload(file, webp, { contentType: "image/webp", upsert: true });
@@ -53,7 +52,7 @@ export async function ensureDishImage(recipeId: string, ingredientNames: string[
   }
 }
 
-async function generate(ai: GoogleGenAI, recipe: RecipeForImage, ingredients: string[]): Promise<Buffer> {
+async function generate(recipe: RecipeForImage, ingredients: string[]): Promise<Buffer> {
   const prompt = [
     `Fotografía de comida realista y apetitosa del plato "${recipe.name_es}" (${recipe.name_en}).`,
     recipe.description_es ? `Descripción: ${recipe.description_es}.` : "",
@@ -62,12 +61,18 @@ async function generate(ai: GoogleGenAI, recipe: RecipeForImage, ingredients: st
     "Sin texto, sin letras, sin marcas de agua, sin personas ni manos.",
   ].filter(Boolean).join(" ");
 
-  const response = await ai.models.generateContent({
-    model: process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image",
-    contents: prompt,
-    config: { responseModalities: [Modality.IMAGE], imageConfig: { aspectRatio: "1:1" } },
+  const response = await getClient().images.generate({
+    model: process.env.INFERHUB_IMAGE_MODEL!,
+    prompt,
+    size: "1024x1024",
+    response_format: "b64_json",
   });
-  const data = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData?.data;
-  if (!data) throw new Error("no image in response");
-  return Buffer.from(data, "base64");
+  const item = response.data?.[0];
+  if (item?.b64_json) return Buffer.from(item.b64_json, "base64");
+  if (item?.url) {
+    const res = await fetch(item.url);
+    if (!res.ok) throw new Error(`image download ${res.status}`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+  throw new Error("no image in response");
 }
