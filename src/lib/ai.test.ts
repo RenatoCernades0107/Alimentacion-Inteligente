@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { hasAi, jsonSchema, parseJsonReply, requireModel } from "./ai";
+import { hasAi, parseJsonReply, requireModel } from "./ai";
 
 describe("ai", () => {
   it("hasAi depende de INFERHUB_API_KEY", () => {
@@ -21,8 +21,11 @@ describe("ai", () => {
     vi.unstubAllEnvs();
   });
 
-  it("jsonSchema arma el response_format", () => {
-    expect(jsonSchema("n", { type: "object" })).toEqual({ type: "json_schema", json_schema: { name: "n", schema: { type: "object" }, strict: false } });
+  it("parseJsonReply tolera cercas de markdown y texto alrededor", () => {
+    const wrap = (content: string) => ({ choices: [{ message: { content } }] }) as never;
+    expect(parseJsonReply(wrap('```json\n{"a":1}\n```'))).toEqual({ a: 1 });
+    expect(parseJsonReply(wrap('Aquí va: {"a":{"b":2}} listo'))).toEqual({ a: { b: 2 } });
+    expect(() => parseJsonReply(wrap("sin json"))).toThrow();
   });
 
   it("parseJsonReply lee el primer mensaje", () => {

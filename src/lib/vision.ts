@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { getClient, jsonSchema, parseJsonReply, requireModel } from "./ai";
+import { completeJson, requireModel } from "./ai";
 import type { PhotoMode } from "./photo";
 
 /** Alimento del catálogo que se le muestra al modelo para que haga el match. */
@@ -84,7 +84,7 @@ function systemPrompt(mode: PhotoMode, catalog: CatalogEntry[]) {
 
 /** Pide al modelo de visión que liste los alimentos de una foto o boleta. */
 export async function analyzeImage(input: { mode: PhotoMode; base64: string; mimeType: string; catalog: CatalogEntry[] }): Promise<VisionItem[]> {
-  const completion = await getClient().chat.completions.create({
+  const reply = await completeJson({
     model: requireModel("INFERHUB_VISION_MODEL"),
     messages: [
       { role: "system", content: systemPrompt(input.mode, input.catalog) },
@@ -96,10 +96,11 @@ export async function analyzeImage(input: { mode: PhotoMode; base64: string; mim
         ],
       },
     ],
-    response_format: jsonSchema("food_items", RESPONSE_SCHEMA),
+    name: "food_items",
+    schema: RESPONSE_SCHEMA,
   });
 
-  const parsed = ResultSchema.safeParse(parseJsonReply(completion));
+  const parsed = ResultSchema.safeParse(reply);
   if (!parsed.success) throw new Error("invalid vision response");
   return parsed.data.items;
 }

@@ -7,6 +7,9 @@ import { loadChefData } from "@/lib/chef-data";
 import { defaultGoal } from "@/lib/chef";
 import { ChefView } from "@/components/chef/chef-view";
 
+/** La llamada a la IA corre como server action de esta ruta: se le da margen. */
+export const maxDuration = 60;
+
 /** Chef IA: arma el plan de comidas conversando con IA y eligiendo platos. */
 export default async function ChefPage({ searchParams }: PageProps<"/chef">) {
   const { date, use } = await searchParams;
