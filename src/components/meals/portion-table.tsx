@@ -7,6 +7,7 @@ import { Minus, Plus, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MemberAvatar } from "@/components/family/member-avatar";
+import { MacroInline, MacroStack } from "@/components/chef/macros";
 import { MAX_SCALE, MIN_SCALE, formatPortion, suggestedScale } from "@/lib/nutrition";
 import { formatQuantity } from "@/lib/units";
 import type { PortionsData } from "@/lib/portions";
@@ -82,6 +83,8 @@ export function PortionTable({
         )}
       </div>
 
+      {data.macrosPerServing && <MacroStack macros={data.macrosPerServing} className="px-3 pt-2" />}
+
       {data.kcalPerServing === null ? (
         <p className="px-3 py-3 text-sm text-muted-foreground">{t("noKcal")}</p>
       ) : (
@@ -102,6 +105,17 @@ export function PortionTable({
                     <div className="min-w-0">
                       <div className="truncate font-medium">{r.name}</div>
                       {r.shortBy > 0 && <div className="text-xs text-muted-foreground">{t("short", { kcal: nf.format(r.shortBy) })}</div>}
+                      {/* Lo que le aportan sus porciones de cada macro. */}
+                      {r.portion !== null && data.macrosPerServing && (
+                        <MacroInline
+                          className="text-xs text-muted-foreground"
+                          macros={{
+                            protein: Math.round(data.macrosPerServing.protein * r.portion),
+                            carbs: Math.round(data.macrosPerServing.carbs * r.portion),
+                            fat: Math.round(data.macrosPerServing.fat * r.portion),
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                 </th>

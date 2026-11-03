@@ -4,6 +4,8 @@ import { Clock } from "lucide-react";
 import { RecipeImage } from "@/components/recipe-image";
 import { FavoriteButton } from "@/components/recipes/favorite-button";
 import { Badge } from "@/components/ui/badge";
+import { MacroInline } from "@/components/chef/macros";
+import { macrosPerServing } from "@/lib/nutrition";
 import type { Suggestion } from "@/lib/suggestions";
 import { localName } from "@/lib/types";
 
@@ -32,6 +34,9 @@ export async function RecipeCard({
     : owner?.kind === "family" ? tm("badgeFamily")
     : null;
 
+  const ingredients = (recipe.recipe_ingredients ?? []).filter((i) => i.food);
+  const macros = macrosPerServing(ingredients.map((i) => ({ ...i, food: i.food! })), recipe.servings);
+
   return (
     <div className="relative">
       <Link href={`/recipes/${recipe.slug}`} className="flex gap-3 rounded-2xl border bg-card p-3 active:bg-muted">
@@ -56,6 +61,7 @@ export async function RecipeCard({
               </span>
             ) : null}
           </div>
+          {ingredients.length > 0 && macros.complete && <MacroInline macros={macros} className="text-xs text-muted-foreground" />}
         </div>
       </Link>
       <FavoriteButton recipeId={recipe.id} favorite={favorite} className="absolute top-1.5 right-1.5" />

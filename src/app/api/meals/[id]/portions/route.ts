@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSession } from "@/lib/session";
 import { loadMealItems } from "@/lib/meal-items";
 import { loadFamilyTargets } from "@/lib/family-targets";
-import { kcalPerServing } from "@/lib/nutrition";
+import { kcalPerServing, macrosPerServing, type Macros } from "@/lib/nutrition";
 import { buildPortions } from "@/lib/portions";
 import type { MealSlot } from "@/lib/types";
 
@@ -39,6 +39,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/meals/[
   let perServing: number | null = null;
   let complete = true;
   let optionalKcal = 0;
+  let macros: Macros | null = null;
   if (meal.recipe) {
     // Con los ingredientes efectivos de la comida (los editados, si los hay).
     const { items } = await loadMealItems(supabase, meal.id);
@@ -46,6 +47,9 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/meals/[
     perServing = r.kcal;
     complete = r.complete;
     optionalKcal = r.optionalKcal;
+    // Sin el dato de algún obligatorio (alimentos propios) los macros quedarían cortos: mejor no mostrarlos.
+    const m = macrosPerServing(items, meal.recipe.servings);
+    if (m.complete) macros = { protein: m.protein, carbs: m.carbs, fat: m.fat };
   } else {
     perServing = meal.kcal_per_serving;
   }
@@ -66,6 +70,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/meals/[
     kcalPerServing: perServing,
     complete,
     optionalKcal,
+    macrosPerServing: macros,
     slot: meal.slot,
     mealsPerDay: family.meals_per_day,
     recipeServings: meal.recipe?.servings ?? null,
