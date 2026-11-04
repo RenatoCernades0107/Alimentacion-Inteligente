@@ -112,6 +112,8 @@
     "title": "Alimentos",
     "empty": "Aún no tienes alimentos. Agrega lo que compraste.",
     "filter": "Filtrar alimentos",
+    "nutrition100": "100 g: {kcal} kcal",
+    "nutritionUnit": "1 unid.: {kcal} kcal",
     "add": "Agregar alimento",
     "expiresIn": "{days, plural, =0 {Vence hoy} =1 {Vence mañana} other {Vence en # días}}",
     "expired": "{days, plural, =1 {Venció ayer} other {Venció hace # días}}",
@@ -306,7 +308,11 @@
     "created": "Alimento creado",
     "kcalPer100": "kcal por 100 {unit}",
     "kcalPerUnit": "kcal por unidad",
-    "kcalHint": "Opcional. Sirve para calcular las calorías de las comidas."
+    "kcalHint": "Opcional. Sirve para calcular las calorías de las comidas.",
+    "protein": "Proteína (g)",
+    "carbs": "Carbos (g)",
+    "fat": "Grasa (g)",
+    "macrosHint": "Opcional, en la misma medida que las kcal (lo dice la etiqueta)."
   },
   "calendar": {
     "title": "Calendario",
@@ -477,7 +483,8 @@
     "addToCalendar": "Agregar al calendario",
     "allMeals": "Todas",
     "photoCredit": "Foto: {author} · {license}",
-    "kcal": "≈ {kcal} kcal por porción"
+    "kcal": "≈ {kcal} kcal por porción",
+    "macrosPerServing": "Proteína, carbos y grasa por porción"
   },
   "myRecipes": {
     "tabAll": "Todas",

@@ -12,6 +12,7 @@ import { FoodImage } from "@/components/food-image";
 import { NativeSelect } from "@/components/native-select";
 import { ExpiryBadge } from "@/components/inventory/expiry-badge";
 import { AddFoodDrawer } from "@/components/inventory/add-food-drawer";
+import { MacroInline } from "@/components/chef/macros";
 import { RipenessPicker, ShelfAdvice, StoragePicker, useStorageLabel } from "@/components/inventory/storage-fields";
 import { deleteInventoryItem, updateInventoryItem } from "@/app/actions/inventory";
 import { adviceFor, moveExpiry, predictExpiry, storageOptions, validRipeness, validStorage, type Ripeness, type Storage } from "@/lib/shelf-life";
@@ -76,6 +77,7 @@ export function InventoryList({ items, today, canEdit }: { items: InventoryItem[
 
 function InventoryRow({ item, today, canEdit, onEdit }: { item: InventoryItem; today: string; canEdit: boolean; onEdit: () => void }) {
   const t = useTranslations("shelf");
+  const ti = useTranslations("inventory");
   const tu = useTranslations("units");
   const locale = useLocale();
   const [showTips, setShowTips] = useState(false);
@@ -105,6 +107,17 @@ function InventoryRow({ item, today, canEdit, onEdit }: { item: InventoryItem; t
               {where && ` · ${where}`}
               {item.ripeness && ripeness && ` · ${t(`state.${ripeness}`)}`}
             </div>
+            {item.food?.kcal_100g != null && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                <span className="tabular-nums">
+                  {/* Los propios "por unidad" guardan 1 unidad = 100 g (src/app/actions/inventory.ts). */}
+                  {item.food.category === "custom" && item.food.default_unit === "unit"
+                    ? ti("nutritionUnit", { kcal: Math.round(item.food.kcal_100g) })
+                    : ti("nutrition100", { kcal: Math.round(item.food.kcal_100g) })}
+                </span>
+                <MacroInline macros={{ protein: item.food.protein_100g, carbs: item.food.carbs_100g, fat: item.food.fat_100g }} />
+              </div>
+            )}
           </div>
         </button>
         {/* El vencimiento y, debajo, el botón de consejos (así el nombre no pierde ancho). */}

@@ -1,4 +1,4 @@
-import { portionFor, slotShare, suggestedScale, type Portion } from "./nutrition";
+import { portionFor, slotShare, suggestedScale, type Macros, type Portion } from "./nutrition";
 import type { MealSlot } from "./types";
 
 export type TargetState = "ok" | "incomplete" | "infant";
@@ -38,6 +38,8 @@ export type PortionsData = {
   complete: boolean;
   /** kcal extra por porción si se incluyen los ingredientes opcionales. */
   optionalKcal: number;
+  /** Gramos de proteína, carbohidratos y grasa de una porción; null si no hay dato (comida sin receta). */
+  macrosPerServing: Macros | null;
   /** Fracción de las kcal del día que corresponde a esta comida (la franja, dividida entre las comidas que la comparten). */
   share: number;
   /** Comidas que se reparten la franja (esta incluida). */
@@ -59,6 +61,7 @@ export function buildPortions(args: {
   kcalPerServing: number | null;
   complete: boolean;
   optionalKcal: number;
+  macrosPerServing?: Macros | null;
   slot: MealSlot;
   mealsPerDay: number;
   recipeServings: number | null;
@@ -84,6 +87,7 @@ export function buildPortions(args: {
     kcalPerServing: perServing,
     complete: args.complete,
     optionalKcal: args.optionalKcal,
+    macrosPerServing: perServing !== null ? (args.macrosPerServing ?? null) : null,
     share,
     siblings: Math.max(1, args.siblings ?? 1),
     recipeServings: args.recipeServings,

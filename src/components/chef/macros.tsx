@@ -38,6 +38,23 @@ export function MacroStack({ macros, className, light }: { macros: MacroGrams; c
   );
 }
 
+/** Gramos de cada macro en una línea compacta ("● 31 g P  ● 0 g C  ● 4 g G"); nada si falta algún dato. */
+export function MacroInline({ macros, className }: { macros: MacroGrams; className?: string }) {
+  const t = useTranslations("chef");
+  if (macros.protein == null || macros.carbs == null || macros.fat == null) return null;
+  const nf = new Intl.NumberFormat(undefined, { maximumFractionDigits: macros.protein + macros.carbs + macros.fat < 10 ? 1 : 0 });
+  return (
+    <span className={cn("inline-flex flex-wrap items-center gap-x-2 tabular-nums", className)}>
+      {(["protein", "carbs", "fat"] as const).map((m) => (
+        <span key={m} className="inline-flex items-center gap-1">
+          <span className={cn("size-1.5 rounded-full", MACRO_COLOR[m].bar)} />
+          {nf.format(macros[m]!)} g {t(`macro.${m}`)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** Anillo de progreso de kcal del día (planificado vs. meta). */
 export function KcalRing({ value, target, size = 64 }: { value: number; target: number; size?: number }) {
   const t = useTranslations("chef");

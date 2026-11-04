@@ -7,10 +7,12 @@ import { todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
 import { loadMemberNames, RECIPE_SELECT, sortIngredients, type RecipeIngredientRow } from "@/lib/recipes";
 import { formatQuantity } from "@/lib/units";
+import { macrosPerServing } from "@/lib/nutrition";
 import { FoodImage } from "@/components/food-image";
 import { RecipeImage } from "@/components/recipe-image";
 import { AddRecipeToCalendar } from "@/components/meals/add-recipe-to-calendar";
 import { FavoriteButton } from "@/components/recipes/favorite-button";
+import { MacroStack } from "@/components/chef/macros";
 import { RecipeActions } from "@/components/recipes/recipe-actions";
 import { Badge } from "@/components/ui/badge";
 import { localName, type Recipe } from "@/lib/types";
@@ -55,6 +57,11 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
   const author = recipe.created_by ? names?.get(recipe.created_by) : null;
 
   const ingredients = sortIngredients(recipe.recipe_ingredients as RecipeIngredientRow[] | undefined);
+  // Macros por porción con los ingredientes obligatorios; no se muestran si a alguno le falta el dato.
+  const macros = macrosPerServing(
+    ingredients.filter((i) => i.food).map((i) => ({ quantity: i.quantity, unit: i.unit, optional: i.optional, food: i.food! })),
+    recipe.servings,
+  );
   const steps = locale === "en" ? recipe.steps_en : recipe.steps_es;
   const slots = slotsFor(family.meals_per_day);
   const defaultSlot = slots.find((s) => recipe.meal_types.includes(s)) ?? (recipe.meal_types.includes("snack") ? slots.find((s) => s.includes("snack")) : undefined) ?? slots[0];
@@ -110,6 +117,12 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
             <span className="inline-flex items-center gap-1 tabular-nums"><Flame className="size-4" /> {t("kcal", { kcal: recipe.kcal_per_serving })}</span>
           ) : null}
         </div>
+        {macros.complete && (
+          <div className="w-full max-w-sm pt-1">
+            <MacroStack macros={macros} />
+            <p className="mt-1 text-xs text-muted-foreground">{t("macrosPerServing")}</p>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

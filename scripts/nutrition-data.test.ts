@@ -60,10 +60,13 @@ describe("macros del catálogo", () => {
   });
 
   it("cuadran con las kcal (4·P + 4·C + 9·G)", () => {
-    // El extracto de vainilla debe sus kcal al alcohol.
+    // Excepciones de USDA que solo se usan en pizcas: el extracto de vainilla debe sus kcal al alcohol, la
+    // canela y el curry tienen tanta fibra (que aporta kcal pero no cuenta como carbohidrato disponible) que
+    // no cuadran, y el polvo de hornear trae almidón con un factor de kcal propio.
+    const EXCEPTIONS = new Set(["vanilla", "cinnamon", "curry", "baking_powder"]);
     for (const [key, [p, c, f]] of Object.entries(macroTable)) {
       expect(p + c + f, key).toBeLessThanOrEqual(100);
-      if (key === "vanilla") continue;
+      if (EXCEPTIONS.has(key)) continue;
       const kcal = table[key][0];
       expect(Math.abs(4 * p + 4 * c + 9 * f - kcal), key).toBeLessThanOrEqual(Math.max(40, 0.35 * kcal));
     }

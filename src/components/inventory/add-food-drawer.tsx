@@ -291,13 +291,16 @@ function CustomStep({ initialName, onCreated }: { initialName: string; onCreated
   const [unit, setUnit] = useState<Unit>("unit");
   const [days, setDays] = useState("");
   const [kcal, setKcal] = useState("");
+  const [macros, setMacros] = useState({ protein: "", carbs: "", fat: "" });
+  const num = (v: string) => (v.trim() ? Number(v.replace(",", ".")) : null);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     start(async () => {
       try {
         const food = await createCustomFood({
-          name, emoji, default_unit: unit, shelf_life_days: days ? Number(days) : null, kcal: kcal.trim() ? Number(kcal.replace(",", ".")) : null,
+          name, emoji, default_unit: unit, shelf_life_days: days ? Number(days) : null, kcal: num(kcal),
+          protein: num(macros.protein), carbs: num(macros.carbs), fat: num(macros.fat),
         });
         toast.success(t("created"));
         onCreated(food as Food);
@@ -335,6 +338,27 @@ function CustomStep({ initialName, onCreated }: { initialName: string; onCreated
         <Label htmlFor="ckcal">{unit === "unit" ? t("kcalPerUnit") : t("kcalPer100", { unit: unit === "ml" || unit === "l" ? "ml" : "g" })}</Label>
         <Input id="ckcal" type="number" inputMode="decimal" min={0} max={1000} step="any" value={kcal} onChange={(e) => setKcal(e.target.value)} className="h-10" />
         <p className="text-xs text-muted-foreground">{t("kcalHint")}</p>
+      </div>
+      <div className="space-y-2">
+        <div className="grid grid-cols-3 gap-2">
+          {(["protein", "carbs", "fat"] as const).map((m) => (
+            <div key={m} className="space-y-2">
+              <Label htmlFor={`c${m}`}>{t(m)}</Label>
+              <Input
+                id={`c${m}`}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step="any"
+                value={macros[m]}
+                onChange={(e) => setMacros((v) => ({ ...v, [m]: e.target.value }))}
+                className="h-10"
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">{t("macrosHint")}</p>
       </div>
       <Button type="submit" size="lg" className="h-11 w-full" disabled={pending || !name.trim()}>{tc("save")}</Button>
     </form>

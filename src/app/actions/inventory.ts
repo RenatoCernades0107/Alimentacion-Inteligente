@@ -83,9 +83,19 @@ export async function addInventoryItem(input: NewItem) {
 }
 
 /**
- * `kcal` es opcional: por unidad si la unidad del alimento es "unid.", y por 100 g (o 100 ml) en los demás casos.
+ * `kcal` y los macros (gramos de proteína, carbohidratos y grasa) son opcionales: por unidad si la unidad del
+ * alimento es "unid.", y por 100 g (o 100 ml) en los demás casos.
  */
-export type NewFood = { name: string; emoji?: string; default_unit: Unit; shelf_life_days?: number | null; kcal?: number | null };
+export type NewFood = {
+  name: string;
+  emoji?: string;
+  default_unit: Unit;
+  shelf_life_days?: number | null;
+  kcal?: number | null;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+};
 
 /** Agrega varios alimentos de una vez (foto o boleta); los que no existen se crean como propios. */
 export async function addInventoryItems(items: (NewItem & { new_food?: NewFood | null })[]) {
@@ -159,6 +169,14 @@ async function insertCustomFood({ supabase, family, user }: Session, input: NewF
   const unit = cleanUnit(input.default_unit);
   const kcal = input.kcal == null ? null : Number(input.kcal);
   if (kcal !== null && !(Number.isFinite(kcal) && kcal >= 0 && kcal <= 1000)) throw new Error("invalid");
+  const grams = (v: number | null | undefined) => {
+    if (v == null) return null;
+    const n = Number(v);
+    if (!(Number.isFinite(n) && n >= 0 && n <= 100)) throw new Error("invalid");
+    return n;
+  };
+  const macros = { protein_100g: grams(input.protein), carbs_100g: grams(input.carbs), fat_100g: grams(input.fat) };
+  const hasData = kcal !== null || Object.values(macros).some((v) => v !== null);
   const { data, error } = await supabase
     .from("foods")
     .insert({
@@ -169,9 +187,10 @@ async function insertCustomFood({ supabase, family, user }: Session, input: NewF
       emoji: input.emoji?.slice(0, 8) || "🍽️",
       default_unit: unit,
       shelf_life_days: input.shelf_life_days && input.shelf_life_days > 0 ? Math.round(input.shelf_life_days) : null,
-      // Por unidad: se guarda "1 unidad = 100 g" para que kcal_100g sea justo las kcal de una unidad.
+      // Por unidad: se guarda "1 unidad = 100 g" para que kcal_100g (y los macros) sean justo los de una unidad.
       kcal_100g: kcal,
-      g_per_unit: kcal !== null && unit === "unit" ? 100 : null,
+      ...macros,
+      g_per_unit: hasData && unit === "unit" ? 100 : null,
       created_by: user.id,
     })
     .select()

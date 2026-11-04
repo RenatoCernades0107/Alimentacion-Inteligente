@@ -66,7 +66,7 @@ Ver [specs.md](specs.md) para los requerimientos y [README.md](README.md) para l
 - [x] Chip de kcal en comidas y recetas; tabla de porciones por integrante; ajustar porciones y descontar lo ajustado
 - [x] kcal manual en comidas sin receta y en alimentos propios
 - [x] Recordatorio para pesarse (cron diario)
-- [ ] Contrastar `nutrition.mjs` con USDA (`node scripts/verify-nutrition.mjs`, requiere una API key gratuita de api.data.gov)
+- [x] kcal y macros de 266 alimentos importados de USDA FoodData Central SR Legacy (`node scripts/import-usda.mjs` → `supabase/data/usda.mjs`); los 18 sin equivalente (sobre todo peruanos) siguen estimados de las Tablas Peruanas
 - [ ] Clasificación del IMC de menores de 5–19 años con las tablas de la OMS (hoy solo se muestra el IMC y un aviso pediátrico)
 - [ ] Confirmar los cortes de IMC de adultos mayores con la tabla del INS y los coeficientes del IOM con la publicación original
 - [ ] Modo embarazo / lactancia, resumen de kcal del día y "quién come" en cada comida (fuera de la primera versión)
@@ -74,6 +74,7 @@ Ver [specs.md](specs.md) para los requerimientos y [README.md](README.md) para l
 ## 8. Calendario como inicio y Chef IA
 - [x] El calendario es la pantalla de inicio; propuestas, comidas sin marcar y por vencer como píldoras arriba (`/calendar` redirige)
 - [x] Macros por 100 g en los 284 alimentos y por porción en las recetas (calculados de los ingredientes)
+- [x] Macros visibles en alimentos (inventario), tarjetas y detalle de recetas, y en las comidas (por porción y por integrante); macros opcionales en alimentos propios
 - [x] Chef IA: objetivo → calibrar gusto deslizando platos → plan por día con kcal y macros vs. meta → chat → al calendario
 - [x] Plan de respaldo sin IA y validación de las respuestas de la IA (`src/lib/chef.test.ts`)
 - [ ] Probar el Chef con la llave real de InferHub y ajustar el prompt con conversaciones reales
