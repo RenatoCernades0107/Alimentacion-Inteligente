@@ -38,6 +38,31 @@ export function MacroStack({ macros, className, light }: { macros: MacroGrams; c
   );
 }
 
+/** Barra con el % de las kcal que viene de cada macro, con los porcentajes a la vista. */
+export function MacroSplit({ macros, className }: { macros: { protein: number; carbs: number; fat: number }; className?: string }) {
+  const t = useTranslations("chef");
+  const k = { protein: macros.protein * 4, carbs: macros.carbs * 4, fat: macros.fat * 9 };
+  const total = k.protein + k.carbs + k.fat;
+  if (!total) return null;
+  const keys = ["protein", "carbs", "fat"] as const;
+  return (
+    <div className={className} aria-label={t("alt.split")}>
+      <div className="flex h-2 overflow-hidden rounded-full bg-muted">
+        {keys.map((m) => (
+          <span key={m} className={MACRO_COLOR[m].bar} style={{ width: `${(k[m] / total) * 100}%` }} />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] font-medium tabular-nums">
+        {keys.map((m) => (
+          <span key={m} className={MACRO_COLOR[m].text}>
+            {Math.round((k[m] / total) * 100)}% {t(`macro.${m}Long`).toLowerCase()}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Gramos de cada macro en una línea compacta ("● 31 g P  ● 0 g C  ● 4 g G"); nada si falta algún dato. */
 export function MacroInline({ macros, className }: { macros: MacroGrams; className?: string }) {
   const t = useTranslations("chef");

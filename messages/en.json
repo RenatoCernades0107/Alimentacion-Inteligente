@@ -872,7 +872,7 @@
     "placeholder": "Ask the Chef…",
     "send": "Send",
     "altTitle": "Options for {slot} on {day}",
-    "altHint": "Swipe → to pick, ← to see another.",
+    "altHint": "Compare the options and pick the one that suits you best.",
     "picked": "Done: {name}",
     "altEmpty": "I'm out of options for your preferences.",
     "moreIdeas": "Give me more options for {slot} on {day}.",
@@ -984,6 +984,22 @@
       "view": "View recipe",
       "willSave": "{count, plural, one {# new recipe will be saved to Recipes.} other {# new recipes will be saved to Recipes.}}",
       "saved": "{count, plural, one {# new recipe saved to Recipes.} other {# new recipes saved to Recipes.}}"
+    },
+    "alt": {
+      "goal": "Your target for {slot}",
+      "sort": {
+        "best": "Suggested",
+        "protein": "More protein",
+        "light": "Fewer kcal",
+        "quick": "Quickest"
+      },
+      "current": "Currently in your plan",
+      "perServing": "1 serving",
+      "yours": "Your serving ({portion})",
+      "noData": "This recipe has no nutrition data.",
+      "choose": "Pick this dish",
+      "vsGoal": "Target: {goal}",
+      "split": "Calorie split by macro"
     }
   },
   "share": {
