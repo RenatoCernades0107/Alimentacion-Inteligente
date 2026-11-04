@@ -68,3 +68,81 @@ export function parseJsonReply(completion: OpenAI.Chat.Completions.ChatCompletio
     return JSON.parse(text.slice(start, end + 1));
   }
 }
+
+export type Tool = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  /** Ejecuta la herramienta; lo que devuelve se le pasa al modelo como texto. */
+  run: (args: Record<string, unknown>) => Promise<string>;
+};
+
+/**
+ * Como `completeJson`, pero el modelo puede llamar herramientas (ej. buscar en la web) antes de
+ * responder. Hace como mucho `maxRounds` rondas de herramientas; en la última se le pide responder sin
+ * más llamadas. Si el proveedor no acepta herramientas o la respuesta final no es JSON, responde con
+ * `completeJson` pasándole en el prompt lo que devolvieron las herramientas.
+ */
+export async function completeJsonWithTools(req: JsonRequest & { tools: Tool[]; maxRounds?: number }): Promise<unknown> {
+  if (!req.tools.length) return completeJson(req);
+  const client = getClient();
+  const maxRounds = req.maxRounds ?? 2;
+  const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = req.tools.map((t) => ({
+    type: "function",
+    function: { name: t.name, description: t.description, parameters: t.parameters },
+  }));
+  const base = {
+    model: req.model,
+    temperature: req.temperature,
+    ...(req.reasoningEffort ? { reasoning_effort: req.reasoningEffort } : {}),
+    response_format: { type: "json_schema" as const, json_schema: { name: req.name, schema: req.schema, strict: false } },
+    tools,
+  };
+  const messages = [...req.messages];
+  /** Lo que devolvieron las herramientas, por si hay que caer a `completeJson`. */
+  const notes: string[] = [];
+  const fallback = () => {
+    if (!notes.length) return completeJson(req);
+    const extra = `\n\nResultados de las herramientas que ya consultaste en este turno:\n${notes.join("\n\n")}`;
+    return completeJson({
+      ...req,
+      messages: req.messages.map((m, i) => (i === 0 && m.role === "system" && typeof m.content === "string" ? { ...m, content: m.content + extra } : m)),
+    });
+  };
+
+  let completion: OpenAI.Chat.Completions.ChatCompletion;
+  try {
+    completion = await client.chat.completions.create({ ...base, messages, tool_choice: "auto" });
+    for (let round = 0; round < maxRounds; round++) {
+      const msg = completion.choices[0]?.message;
+      const calls = (msg?.tool_calls ?? []).filter((c) => c.type === "function");
+      if (!msg || !calls.length) break;
+      messages.push(msg);
+      for (const call of calls) {
+        const tool = req.tools.find((t) => t.name === call.function.name);
+        let args: Record<string, unknown> = {};
+        try {
+          args = JSON.parse(call.function.arguments || "{}");
+        } catch {
+          // argumentos inválidos: la herramienta recibe {}
+        }
+        const out = tool ? await tool.run(args).catch(() => "error") : "unknown tool";
+        notes.push(`[${call.function.name}] ${JSON.stringify(args)}\n${out}`);
+        messages.push({ role: "tool", tool_call_id: call.id, content: out });
+      }
+      const last = round === maxRounds - 1;
+      completion = await client.chat.completions.create({ ...base, messages, tool_choice: last ? "none" : "auto" });
+    }
+  } catch (e) {
+    if (!(e instanceof OpenAI.BadRequestError)) throw e;
+    console.warn("tools rejected, answering without them:", e.message);
+    return fallback();
+  }
+  try {
+    const parsed = parseJsonReply(completion);
+    if (parsed && typeof parsed === "object" && Object.keys(parsed).length) return parsed;
+  } catch {
+    // cae al respaldo
+  }
+  return fallback();
+}

@@ -2,25 +2,24 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowRight, Check, Wand2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check } from "lucide-react";
 import { goalsFor, PREFS, type ChefPrefs, type DayTargets, type Goal, type Pref, type Scope } from "@/lib/chef";
 import { addDays, parseDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
-import type { ChefViewProps } from "@/components/chef/chef-view";
 
-const GOAL_EMOJI: Record<Goal, string> = { lose: "🔥", muscle: "💪", maintain: "⚖️", healthy: "🥗", energy: "⚡" };
+export const GOAL_EMOJI: Record<Goal, string> = { lose: "🔥", muscle: "💪", maintain: "⚖️", healthy: "🥗", energy: "⚡" };
 const PREF_EMOJI: Record<Pref, string> = { pantry: "🏠", expiring: "⏳", quick: "⏱️", peruvian: "🇵🇪", american: "🇺🇸", veggie: "🌱" };
 
-/** Paso 1: objetivo, cuántos días y preferencias. */
-export function SetupStep({
-  firstName, today, minor, myKcal, prefs, targets, onChange, onTaste, onBuild,
-}: ChefViewProps & {
+/** Ajustes del plan: meta del día, objetivo, cuántos días y preferencias. */
+export function PrefsPanel({
+  today, minor, myKcal, prefs, targets, onChange,
+}: {
+  today: string;
+  minor: boolean;
+  myKcal: number | null;
   prefs: ChefPrefs;
   targets: DayTargets;
   onChange: (prefs: ChefPrefs) => void;
-  onTaste: () => void;
-  onBuild: () => void;
 }) {
   const t = useTranslations("chef");
   const locale = useLocale();
@@ -45,27 +44,21 @@ export function SetupStep({
   };
 
   return (
-    <div className="pb-8">
-      <section className="relative mt-1 overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 p-5 text-white shadow-xl shadow-fuchsia-600/20">
-        <div className="pointer-events-none absolute -top-10 -right-8 size-40 rounded-full bg-white/15 blur-2xl" />
-        <p className="text-sm font-medium text-white/80">{t("hello", { name: firstName })}</p>
-        <h2 className="mt-1 text-2xl leading-tight font-bold text-balance">{t("heroTitle")}</h2>
-        <p className="mt-2 text-sm text-white/85">{t("heroBody")}</p>
-        <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white/15 p-3 backdrop-blur">
-          <span className="text-2xl">🎯</span>
-          <div className="min-w-0 flex-1 text-sm">
-            <p className="font-semibold">{t("targetLine", { kcal: targets.kcal })}</p>
-            <p className="text-white/80">{t("targetMacros", { protein: targets.protein, carbs: targets.carbs, fat: targets.fat })}</p>
-          </div>
-          {myKcal == null && (
-            <Link href="/weight" className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-fuchsia-700">
-              {t("completeData")}
-            </Link>
-          )}
+    <div>
+      <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-orange-500 p-3 text-white">
+        <span className="text-2xl">🎯</span>
+        <div className="min-w-0 flex-1 text-sm">
+          <p className="font-semibold">{t("targetLine", { kcal: targets.kcal })}</p>
+          <p className="text-white/85">{t("targetMacros", { protein: targets.protein, carbs: targets.carbs, fat: targets.fat })}</p>
         </div>
-      </section>
+        {myKcal == null && (
+          <Link href="/weight" className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-fuchsia-700">
+            {t("completeData")}
+          </Link>
+        )}
+      </div>
 
-      <h3 className="mt-6 mb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">{t("goalQuestion")}</h3>
+      <h3 className="mt-5 mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{t("goalQuestion")}</h3>
       <div className="grid grid-cols-2 gap-2">
         {goalsFor(minor).map((g, i, all) => {
           const active = prefs.goal === g;
@@ -75,17 +68,19 @@ export function SetupStep({
               onClick={() => onChange({ ...prefs, goal: g })}
               aria-pressed={active}
               className={cn(
-                "relative flex flex-col items-start gap-1 rounded-2xl border bg-card p-3 text-left transition-all active:scale-[0.97]",
+                "relative flex items-center gap-2 rounded-2xl border bg-card p-2.5 text-left transition-all active:scale-[0.97]",
                 active ? "border-fuchsia-500 bg-fuchsia-50 ring-2 ring-fuchsia-500/30 dark:bg-fuchsia-950/30" : "",
                 i === all.length - 1 && all.length % 2 === 1 && "col-span-2",
               )}
             >
-              <span className="text-2xl">{GOAL_EMOJI[g]}</span>
-              <span className="font-semibold">{t(`goal.${g}`)}</span>
-              <span className="text-xs text-muted-foreground">{t(`goalHint.${g}`)}</span>
+              <span className="text-xl">{GOAL_EMOJI[g]}</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{t(`goal.${g}`)}</span>
+                <span className="block truncate text-[11px] text-muted-foreground">{t(`goalHint.${g}`)}</span>
+              </span>
               {active && (
-                <span className="absolute top-2.5 right-2.5 flex size-5 items-center justify-center rounded-full bg-fuchsia-600 text-white">
-                  <Check className="size-3" strokeWidth={3} />
+                <span className="absolute top-2 right-2 flex size-4 items-center justify-center rounded-full bg-fuchsia-600 text-white">
+                  <Check className="size-2.5" strokeWidth={3} />
                 </span>
               )}
             </button>
@@ -93,7 +88,7 @@ export function SetupStep({
         })}
       </div>
 
-      <h3 className="mt-6 mb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">{t("scopeQuestion")}</h3>
+      <h3 className="mt-5 mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{t("scopeQuestion")}</h3>
       <div className="flex rounded-2xl bg-muted p-1">
         {scopes.map(({ key, label }) => (
           <button
@@ -111,7 +106,7 @@ export function SetupStep({
       </div>
       {prefs.scope === "week" && <p className="mt-1.5 text-xs text-muted-foreground">{t("weekRange", { to: dayFmt.format(parseDate(addDays(prefs.start, 6))) })}</p>}
 
-      <h3 className="mt-6 mb-2 text-sm font-semibold tracking-wide text-muted-foreground uppercase">{t("prefsQuestion")}</h3>
+      <h3 className="mt-5 mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{t("prefsQuestion")}</h3>
       <div className="flex flex-wrap gap-2">
         {PREFS.map((p) => {
           const active = prefs.prefs.includes(p);
@@ -131,14 +126,7 @@ export function SetupStep({
           );
         })}
       </div>
-
-      <Button onClick={onTaste} size="lg" className="mt-8 h-14 w-full rounded-2xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-orange-500 text-base font-semibold text-white shadow-lg shadow-fuchsia-600/25">
-        {t("startTaste")} <ArrowRight className="size-5" />
-      </Button>
-      <button onClick={onBuild} className="mx-auto mt-3 flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-        <Wand2 className="size-4" /> {t("skipTaste")}
-      </button>
-      <p className="mt-6 text-center text-xs text-muted-foreground">{t("disclaimer")}</p>
+      <p className="mt-5 text-center text-xs text-muted-foreground">{t("disclaimer")}</p>
     </div>
   );
 }
