@@ -8,7 +8,7 @@ import { loadDraftList } from "@/lib/chef-drafts";
 import { defaultGoal } from "@/lib/chef";
 import { ChefView } from "@/components/chef/chef-view";
 
-/** La llamada a la IA corre como server action de esta ruta: se le da margen. */
+/** Pasar el plan al calendario (con recetas nuevas) corre como server action de esta ruta: se le da margen. El turno del Chef va por /api/chef. */
 export const maxDuration = 90;
 
 /** Chef IA: chat para armar planes de comidas, guardados como borradores. */

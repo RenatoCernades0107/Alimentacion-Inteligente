@@ -959,7 +959,32 @@
       "copyText": "Copiar el plan como texto",
       "textCopied": "Plan copiado: pégalo donde quieras."
     },
-    "share": "Compartir"
+    "share": "Compartir",
+    "steps": {
+      "context": "Revisando tu objetivo y {count} platos del catálogo",
+      "search": "Buscando en la web: “{query}”",
+      "read": "{count, plural, =0 {No encontré fuentes} one {Leí # fuente} other {Leí # fuentes}}",
+      "answer": "Escribiendo la respuesta",
+      "recipe": "Creé la receta: {name}",
+      "sending": "Enviando tu mensaje al Chef"
+    },
+    "thoughtFor": "{seconds, plural, one {Pensó # s} other {Pensó # s}}",
+    "showThinking": "Ver lo que pensó",
+    "hideThinking": "Ocultar lo que pensó",
+    "custom": {
+      "badge": "Nueva",
+      "title": "Receta nueva del Chef",
+      "hint": "El Chef creó esta receta para ti. Se guardará en Recetas cuando pases el plan al calendario.",
+      "ingredients": "Ingredientes",
+      "steps": "Preparación",
+      "servings": "{count, plural, one {# porción} other {# porciones}}",
+      "toTaste": "al gusto",
+      "optional": "opcional",
+      "perServing": "Por porción",
+      "view": "Ver receta",
+      "willSave": "{count, plural, one {Se guardará # receta nueva en Recetas.} other {Se guardarán # recetas nuevas en Recetas.}}",
+      "saved": "{count, plural, one {# receta nueva guardada en Recetas.} other {# recetas nuevas guardadas en Recetas.}}"
+    }
   },
   "share": {
     "badge": "Plan compartido · Chef IA",

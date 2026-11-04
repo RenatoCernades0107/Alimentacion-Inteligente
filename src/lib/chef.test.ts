@@ -15,6 +15,8 @@ import {
   pasteClip,
   planToText,
   rebaseDraft,
+  migrateDraft,
+  type CustomDish,
   type DishCard,
   type DraftData,
   type Plan,
@@ -206,13 +208,14 @@ describe("copiar y pegar comidas", () => {
 
 describe("borradores", () => {
   const draft: DraftData = {
-    v: 2,
+    v: 3,
     prefs: { goal: "healthy", scope: "week", prefs: [], start: "2026-10-10" },
     liked: [],
     disliked: [],
     plan: { [slotKey("2026-10-10", "lunch")]: { recipeId: "pollo" }, [slotKey("2026-10-12", "dinner")]: { recipeId: "lomo" } },
     messages: [],
     quickReplies: [],
+    custom: {},
   };
   it("un borrador de días pasados se mueve para empezar hoy", () => {
     const { data, shifted } = rebaseDraft(draft, "2026-10-13");
@@ -242,5 +245,46 @@ describe("respuestas de la IA con errores de forma", () => {
       [slotKey("2026-10-12", "lunch"), "pollo"],
       [slotKey("2026-10-12", "breakfast"), "avena"],
     ]);
+  });
+});
+
+describe("recetas nuevas en la respuesta", () => {
+  const dish: CustomDish = {
+    card: card("11111111-1111-4111-8111-111111111111", { slug: "nueva-11111111", name_es: "Bowl de quinua", name_en: "Quinoa bowl", custom: true }),
+    recipe: {
+      name_es: "Bowl de quinua", name_en: "Quinoa bowl", description: "", emoji: "🥗", meal_types: ["lunch"], servings: 2, time_minutes: 20,
+      country: "PE", ingredients: [], steps: ["Mezclar"],
+    },
+  };
+  const ctx = { cards: byId, slots, dates: new Set(["2026-10-12"]), busy: new Set<string>(), newDishes: [{ ref: "bowl-quinua", dish }] };
+
+  it("acepta el ref de una receta nueva y la devuelve si quedó en el plan", () => {
+    const r = sanitizeReply({ message: "ok", plan: [{ date: "2026-10-12", slot: "lunch", slug: "bowl-quinua" }] }, ctx);
+    expect(r.changes).toEqual([{ key: slotKey("2026-10-12", "lunch"), recipeId: dish.card.id, reason: undefined }]);
+    expect(r.custom).toEqual([dish]);
+  });
+  it("también por su nombre", () => {
+    const r = sanitizeReply({ message: "ok", plan: [{ date: "2026-10-12", slot: "dinner", slug: "Quinoa Bowl" }] }, ctx);
+    expect(r.changes[0].recipeId).toBe(dish.card.id);
+  });
+  it("una receta nueva que no se usa no se devuelve", () => {
+    const r = sanitizeReply({ message: "ok", plan: [{ date: "2026-10-12", slot: "lunch", slug: "pollo" }] }, ctx);
+    expect(r.custom).toEqual([]);
+  });
+  it("las alternativas pueden incluir recetas nuevas", () => {
+    const r = sanitizeReply({ message: "ok", alternatives: { date: "2026-10-12", slot: "lunch", options: [{ slug: "bowl-quinua" }, { slug: "pollo" }] } }, ctx);
+    expect(r.alternatives?.options.map((o) => o.recipeId)).toEqual([dish.card.id, "pollo"]);
+    expect(r.custom).toEqual([dish]);
+  });
+});
+
+describe("migración de borradores", () => {
+  it("un borrador v2 se lee como v3 sin recetas nuevas", () => {
+    expect(migrateDraft({ v: 2, plan: {} })).toEqual({ v: 3, plan: {}, custom: {} });
+  });
+  it("los demás quedan igual", () => {
+    const d = { v: 3, custom: {} };
+    expect(migrateDraft(d)).toBe(d);
+    expect(migrateDraft(null)).toBe(null);
   });
 });

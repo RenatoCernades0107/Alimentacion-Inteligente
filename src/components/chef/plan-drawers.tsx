@@ -10,7 +10,7 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { RecipeImage } from "@/components/recipe-image";
 import { DishDeck, type DeckItem } from "@/components/chef/dish-deck";
 import { applyChefPlan } from "@/app/actions/chef";
-import { myServing, parseSlotKey, type ChefReply, type DishCard, type SlotKey } from "@/lib/chef";
+import { myServing, parseSlotKey, type ChefReply, type DishCard, type DraftData, type SlotKey } from "@/lib/chef";
 import { formatPortion } from "@/lib/nutrition";
 import { parseDate } from "@/lib/dates";
 import { localName } from "@/lib/types";
@@ -90,7 +90,7 @@ export function AlternativesDrawer({
 
 /** Confirmar y pasar el plan al calendario (padres: comidas planificadas; hijos: propuestas). */
 export function ApplyDrawer({
-  open, onOpenChange, entries, dates, cardMap, isParent,
+  open, onOpenChange, entries, dates, cardMap, isParent, custom, onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -98,11 +98,16 @@ export function ApplyDrawer({
   dates: string[];
   cardMap: ReadonlyMap<string, DishCard>;
   isParent: boolean;
+  /** Recetas nuevas del Chef en el borrador. */
+  custom: DraftData["custom"];
+  /** Las recetas nuevas ya se guardaron en "Recetas": id temporal → id real. */
+  onSaved: (saved: Record<string, string>) => void;
 }) {
   const t = useTranslations("chef");
   const locale = useLocale();
   const router = useRouter();
-  const [applied, setApplied] = useState<{ added: number; skipped: number } | null>(null);
+  const [applied, setApplied] = useState<{ added: number; skipped: number; saved: number } | null>(null);
+  const newIds = [...new Set(entries.map((e) => e.recipeId).filter((id) => custom[id]))];
   const [applying, startApply] = useTransition();
   const dayLong = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short", timeZone: "UTC" });
 
@@ -115,7 +120,13 @@ export function ApplyDrawer({
   const apply = () =>
     startApply(async () => {
       try {
-        setApplied(await applyChefPlan(entries));
+        const res = await applyChefPlan(entries, Object.fromEntries(newIds.map((id) => [id, custom[id].recipe])));
+        const savedCount = Object.keys(res.saved).length;
+        if (savedCount) {
+          onSaved(res.saved);
+          router.refresh();
+        }
+        setApplied({ added: res.added, skipped: res.skipped, saved: savedCount });
       } catch {
         toast.error(t("error"));
       }
@@ -133,6 +144,7 @@ export function ApplyDrawer({
                 {isParent ? t("appliedBody") : t("proposedBody")}
                 {applied.skipped > 0 && ` ${t("skipped", { count: applied.skipped })}`}
               </DrawerDescription>
+              {applied.saved > 0 && <p className="mt-2 text-sm font-medium">✨ {t("custom.saved", { count: applied.saved })}</p>}
               <p className="mt-2 text-xs text-muted-foreground">{t("draftKept")}</p>
               <Button
                 className="mt-6 h-12 w-full rounded-2xl font-semibold"
@@ -148,7 +160,10 @@ export function ApplyDrawer({
             <>
               <DrawerHeader className="px-0">
                 <DrawerTitle>{isParent ? t("applyTitle") : t("proposeTitle")}</DrawerTitle>
-                <DrawerDescription>{isParent ? t("applyBody", { count: entries.length }) : t("proposeBody", { count: entries.length })}</DrawerDescription>
+                <DrawerDescription>
+                  {isParent ? t("applyBody", { count: entries.length }) : t("proposeBody", { count: entries.length })}
+                  {newIds.length > 0 && ` ${t("custom.willSave", { count: newIds.length })}`}
+                </DrawerDescription>
               </DrawerHeader>
               <ul className="space-y-3">
                 {dates
@@ -163,7 +178,7 @@ export function ApplyDrawer({
                             const c = cardMap.get(e.recipeId)!;
                             return (
                               <div key={e.key} className="w-20 shrink-0">
-                                <RecipeImage src={c.image_url} emoji={c.emoji} recipeId={c.id} className="size-20 rounded-xl text-3xl" />
+                                <RecipeImage src={c.image_url} emoji={c.emoji} recipeId={c.custom ? undefined : c.id} className="size-20 rounded-xl text-3xl" />
                                 <p className="mt-1 line-clamp-2 text-[11px] leading-tight">{localName(c, locale)}</p>
                               </div>
                             );

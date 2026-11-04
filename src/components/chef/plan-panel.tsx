@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ClipboardCopy, ClipboardPaste, Copy, FileText, Lock, Plus, Repeat2, Wand2, X } from "lucide-react";
+import { BookOpen, ClipboardCopy, ClipboardPaste, Copy, FileText, Lock, Plus, Repeat2, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RecipeImage } from "@/components/recipe-image";
 import { KcalRing, MacroStack, MacroTargets } from "@/components/chef/macros";
@@ -21,7 +21,7 @@ type Serving = ReturnType<typeof myServing>;
  */
 export function PlanPanel({
   plan, dates, targets, cardMap, busy, slots, mealsPerDay, myKcal, pending, highlight, clip,
-  onSwap, onSet, onClip, onPaste, onBuild,
+  onSwap, onSet, onClip, onPaste, onBuild, onOpenCustom,
 }: {
   plan: Plan;
   dates: string[];
@@ -40,6 +40,8 @@ export function PlanPanel({
   /** Pega lo copiado: en franjas (plato) o en días (día). */
   onPaste: (targets: string[]) => void;
   onBuild: () => void;
+  /** Abre una receta nueva del Chef (ingredientes y pasos). */
+  onOpenCustom: (recipeId: string) => void;
 }) {
   const t = useTranslations("chef");
   const ts = useTranslations("slots");
@@ -178,6 +180,7 @@ export function PlanPanel({
                     toast.success(t("clip.mealCopied", { name: localName(card, locale) }));
                   }}
                   onPaste={() => onPaste([key])}
+                  onOpen={card.custom ? () => onOpenCustom(card.id) : undefined}
                 />
               ) : firstBuild ? (
                 <div className="h-24 animate-pulse rounded-2xl bg-gradient-to-r from-muted via-muted/50 to-muted" />
@@ -223,7 +226,7 @@ export function PlanPanel({
 
 /** Plato elegido para una franja, con su porción, la razón del Chef y acciones (cambiar, copiar, pegar, quitar). */
 function SlotCard({
-  card, reason, serving, fresh, canPaste, onSwap, onRemove, onCopy, onPaste,
+  card, reason, serving, fresh, canPaste, onSwap, onRemove, onCopy, onPaste, onOpen,
 }: {
   card: DishCard;
   reason?: string;
@@ -235,9 +238,12 @@ function SlotCard({
   onRemove: () => void;
   onCopy: () => void;
   onPaste: () => void;
+  /** Solo en recetas nuevas del Chef: ver ingredientes y pasos. */
+  onOpen?: () => void;
 }) {
   const t = useTranslations("chef");
   const locale = useLocale();
+  const image = <RecipeImage src={card.image_url} emoji={card.emoji} recipeId={card.custom ? undefined : card.id} alt={localName(card, locale)} className="size-20 rounded-xl text-3xl" />;
   return (
     <div
       className={cn(
@@ -246,8 +252,15 @@ function SlotCard({
       )}
     >
       <div className="flex gap-3">
-        <RecipeImage src={card.image_url} emoji={card.emoji} recipeId={card.id} alt={localName(card, locale)} className="size-20 rounded-xl text-3xl" />
+        {onOpen ? (
+          <button onClick={onOpen} aria-label={t("custom.view")} className="shrink-0 rounded-xl">
+            {image}
+          </button>
+        ) : (
+          image
+        )}
         <div className="min-w-0 flex-1">
+          {card.custom && <CustomBadge className="mb-1" />}
           <div className="flex items-start gap-1">
             <p className="line-clamp-2 flex-1 leading-tight font-semibold">{localName(card, locale)}</p>
             <button onClick={onRemove} aria-label={t("remove")} className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground active:bg-muted">
@@ -267,6 +280,11 @@ function SlotCard({
         <button onClick={onSwap} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-muted/70 py-2 text-xs font-semibold active:bg-muted">
           <Repeat2 className="size-4" /> {t("swap")}
         </button>
+        {onOpen && (
+          <button onClick={onOpen} className="flex items-center justify-center gap-1.5 rounded-xl bg-muted/70 px-3 py-2 text-xs font-semibold active:bg-muted">
+            <BookOpen className="size-4" /> {t("custom.view")}
+          </button>
+        )}
         <button onClick={onCopy} aria-label={t("clip.copy")} className="flex items-center justify-center gap-1.5 rounded-xl bg-muted/70 px-3 py-2 text-xs font-semibold active:bg-muted">
           <Copy className="size-4" /> {t("clip.copy")}
         </button>
@@ -280,5 +298,15 @@ function SlotCard({
         )}
       </div>
     </div>
+  );
+}
+
+/** Insignia de una receta nueva inventada por el Chef. */
+export function CustomBadge({ className }: { className?: string }) {
+  const t = useTranslations("chef");
+  return (
+    <span className={cn("inline-flex items-center gap-1 rounded-full bg-fuchsia-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-fuchsia-800 uppercase dark:bg-fuchsia-950/60 dark:text-fuchsia-200", className)}>
+      ✨ {t("custom.badge")}
+    </span>
   );
 }
