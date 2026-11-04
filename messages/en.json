@@ -940,7 +940,8 @@
       "copyTitle": "{title} (copy)",
       "notFound": "That draft no longer exists.",
       "rebased": "This plan was for past days, so I moved it to start today.",
-      "retrySave": "Couldn't save. Tap to retry."
+      "retrySave": "Couldn't save. Tap to retry.",
+      "savedLocally": "Couldn't save to the cloud; I saved it on this device and will retry."
     },
     "clip": {
       "copy": "Copy",
@@ -957,6 +958,48 @@
       "nothing": "Nothing to paste there.",
       "copyText": "Copy plan as text",
       "textCopied": "Plan copied. Paste it anywhere."
-    }
+    },
+    "share": "Share"
+  },
+  "share": {
+    "badge": "Shared plan · Chef AI",
+    "untitled": "Untitled plan",
+    "byOn": "By {name} · {date}",
+    "on": "Shared on {date}",
+    "noChat": "This plan has no conversation.",
+    "noPlan": "This plan has no meals yet.",
+    "kcalPerServing": "{kcal} kcal per serving",
+    "continue": "Keep editing in my Chef",
+    "openMine": "Open in my Chef",
+    "copying": "Copying…",
+    "loginToContinue": "Sign in to keep editing",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied",
+    "notFoundTitle": "This link no longer exists",
+    "notFoundBody": "Whoever shared it may have removed it or deleted the plan.",
+    "goChef": "Go to Chef AI",
+    "metaDescription": "A meal plan made with the Alimentación Inteligente Chef AI.",
+    "title": "Share plan",
+    "description": "Create a link so someone else can see this plan and the conversation, and keep editing it in their Chef.",
+    "point1": "They'll see the plan and the conversation as they are now.",
+    "point2": "They can keep editing their own copy; your draft doesn't change.",
+    "point3": "Changes you make later aren't visible until you update the link. You can remove it anytime.",
+    "create": "Create link",
+    "creating": "Creating…",
+    "created": "Link created and copied",
+    "updated": "Link updated with your latest changes",
+    "removed": "No longer shared",
+    "error": "Couldn't do that. Try again.",
+    "link": "Share link",
+    "copy": "Copy",
+    "copied": "Copied",
+    "sharedAt": "Snapshot from {date}. Later changes aren't visible until you update it.",
+    "shareVia": "Send…",
+    "update": "Update with latest changes",
+    "remove": "Stop sharing",
+    "shareTitle": "My meal plan",
+    "shareText": "Check out the meal plan I made with Chef AI",
+    "needsSave": "To share, the draft must be saved to the cloud, and it couldn't be saved right now. Check your connection and try again.",
+    "retry": "Retry"
   }
 }

@@ -360,6 +360,12 @@ export function fallbackAlternatives(cards: DishCard[], plan: Plan, key: SlotKey
 
 // ─────────────────────────────────────── Validación de la IA ────────────────────────────────────
 
+/** Nombres de franja que a veces devuelve la IA en vez de la clave. */
+const SLOT_ALIASES: Record<string, MealSlot> = {
+  desayuno: "breakfast", almuerzo: "lunch", cena: "dinner", comida: "lunch",
+  "media manana": "morning_snack", "media tarde": "afternoon_snack", "morning snack": "morning_snack", "afternoon snack": "afternoon_snack",
+};
+
 export type RawReply = {
   message?: string;
   title?: string | null;
@@ -381,8 +387,14 @@ export function sanitizeReply(
   /** Resultados de la búsqueda web de este turno (las fuentes se toman solo de aquí). */
   searched: Source[] = [],
 ): ChefReply {
-  const bySlug = new Map([...ctx.cards.values()].map((c) => [c.slug, c]));
-  const validKey = (date: string, slot: string): SlotKey | null => {
+  // Los modelos a veces cambian mayúsculas, ponen el nombre del plato en vez del slug o agregan espacios.
+  const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const lookup = new Map<string, DishCard>();
+  for (const c of ctx.cards.values()) for (const k of [c.name_en, c.name_es, c.slug]) lookup.set(norm(k), c);
+  const bySlug = { get: (slug: string | null | undefined) => (typeof slug === "string" ? lookup.get(norm(slug)) : undefined) };
+  const validKey = (date: string, rawSlot: string): SlotKey | null => {
+    const slot = SLOT_ALIASES[norm(rawSlot ?? "")] ?? norm(rawSlot ?? "");
+    date = (date ?? "").trim().slice(0, 10);
     if (!ctx.dates.has(date) || !ctx.slots.includes(slot as MealSlot)) return null;
     const key = slotKey(date, slot as MealSlot);
     return ctx.busy.has(key) ? null : key;

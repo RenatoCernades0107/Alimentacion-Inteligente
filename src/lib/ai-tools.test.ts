@@ -57,3 +57,38 @@ describe("completeJsonWithTools", () => {
     expect(create.mock.calls[1][0].tools).toBeUndefined();
   });
 });
+
+import { completeJson, escapeControlChars, parseJsonReply } from "./ai";
+
+describe("respuestas JSON robustas", () => {
+  beforeEach(() => {
+    create.mockReset();
+    vi.stubEnv("INFERHUB_API_KEY", "k");
+  });
+
+  it("acepta saltos de línea crudos dentro de los textos", () => {
+    const raw = '{"message":"Hola\nmundo\t!","plan":[]}';
+    expect(escapeControlChars(raw)).toBe('{"message":"Hola\\nmundo\\t!","plan":[]}');
+    expect(parseJsonReply(reply({ content: "```json\n" + raw + "\n```" }) as never)).toEqual({ message: "Hola\nmundo\t!", plan: [] });
+  });
+
+  it("si la primera respuesta llega vacía, reintenta con json_object", async () => {
+    create.mockResolvedValueOnce(reply({ content: "" })).mockResolvedValueOnce(reply({ content: '{"message":"ok"}' }));
+    expect(await completeJson({ ...req([]), budgetMs: 30_000 })).toEqual({ message: "ok" });
+    expect(create.mock.calls[1][0].response_format).toEqual({ type: "json_object" });
+  });
+
+  it("cada llamada tiene plazo y no usa los reintentos automáticos del SDK", async () => {
+    create.mockResolvedValueOnce(reply({ content: '{"message":"ok"}' }));
+    await completeJson({ ...req([]), budgetMs: 30_000 });
+    const opts = create.mock.calls[0][1];
+    expect(opts.maxRetries).toBe(0);
+    expect(opts.timeout).toBeLessThanOrEqual(30_000);
+  });
+
+  it("los errores de red no se reintentan en silencio", async () => {
+    create.mockRejectedValueOnce(new Error("timeout"));
+    await expect(completeJson({ ...req([]), budgetMs: 30_000 })).rejects.toThrow("timeout");
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});

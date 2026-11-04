@@ -13,7 +13,7 @@ export const maxDuration = 90;
 
 /** Chef IA: chat para armar planes de comidas, guardados como borradores. */
 export default async function ChefPage({ searchParams }: PageProps<"/chef">) {
-  const { date, use } = await searchParams;
+  const { date, use, draft } = await searchParams;
   const { supabase, family, profile, isParent, user } = await requireMember();
   const locale = await getLocale();
   const today = todayIn(family.timezone);
@@ -42,6 +42,7 @@ export default async function ChefPage({ searchParams }: PageProps<"/chef">) {
       initialGoal={defaultGoal(target.direction, minor)}
       useExpiring={use === "expiring"}
       drafts={drafts}
+      openId={typeof draft === "string" && /^[0-9a-f-]{36}$/i.test(draft) ? draft : null}
     />
   );
 }

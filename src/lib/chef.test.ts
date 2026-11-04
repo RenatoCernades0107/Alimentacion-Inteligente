@@ -224,3 +224,23 @@ describe("borradores", () => {
     expect(rebaseDraft(draft, "2026-10-10").data).toBe(draft);
   });
 });
+
+describe("respuestas de la IA con errores de forma", () => {
+  const ctx = { cards: byId, slots, dates: new Set(["2026-10-12"]), busy: new Set<string>() };
+  it("acepta slugs con mayúsculas o el nombre del plato, y franjas en español", () => {
+    const r = sanitizeReply(
+      {
+        message: "",
+        plan: [
+          { date: "2026-10-12", slot: "Almuerzo", slug: " Pollo " },
+          { date: "2026-10-12T00:00:00", slot: "desayuno", slug: "AVENA" },
+        ],
+      },
+      ctx,
+    );
+    expect(r.changes.map((c) => [c.key, c.recipeId])).toEqual([
+      [slotKey("2026-10-12", "lunch"), "pollo"],
+      [slotKey("2026-10-12", "breakfast"), "avena"],
+    ]);
+  });
+});
