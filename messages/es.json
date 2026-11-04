@@ -940,7 +940,8 @@
       "copyTitle": "{title} (copia)",
       "notFound": "Ese borrador ya no existe.",
       "rebased": "Este plan era de días pasados: lo moví para que empiece hoy.",
-      "retrySave": "No se pudo guardar. Toca para reintentar."
+      "retrySave": "No se pudo guardar. Toca para reintentar.",
+      "savedLocally": "No se pudo guardar en la nube; lo guardé en este dispositivo y lo reintentaré."
     },
     "clip": {
       "copy": "Copiar",
@@ -957,6 +958,48 @@
       "nothing": "No había nada que pegar ahí.",
       "copyText": "Copiar el plan como texto",
       "textCopied": "Plan copiado: pégalo donde quieras."
-    }
+    },
+    "share": "Compartir"
+  },
+  "share": {
+    "badge": "Plan compartido · Chef IA",
+    "untitled": "Plan sin título",
+    "byOn": "De {name} · {date}",
+    "on": "Compartido el {date}",
+    "noChat": "Este plan no tiene conversación.",
+    "noPlan": "Este plan todavía no tiene comidas.",
+    "kcalPerServing": "{kcal} kcal por porción",
+    "continue": "Seguir editando en mi Chef",
+    "openMine": "Abrir en mi Chef",
+    "copying": "Copiando…",
+    "loginToContinue": "Inicia sesión para seguir editando",
+    "copyLink": "Copiar link",
+    "linkCopied": "Link copiado",
+    "notFoundTitle": "Este link ya no existe",
+    "notFoundBody": "Quien lo compartió pudo haberlo quitado o eliminado el plan.",
+    "goChef": "Ir al Chef IA",
+    "metaDescription": "Un plan de comidas armado con el Chef IA de Alimentación Inteligente.",
+    "title": "Compartir plan",
+    "description": "Crea un link para que otra persona vea este plan y la conversación, y pueda seguir editándolo en su Chef.",
+    "point1": "Verá el plan y la conversación tal como están ahora.",
+    "point2": "Puede seguir editando su propia copia; tu borrador no cambia.",
+    "point3": "Lo que cambies después no se ve hasta que actualices el link. Puedes quitarlo cuando quieras.",
+    "create": "Crear link",
+    "creating": "Creando…",
+    "created": "Link creado y copiado",
+    "updated": "Link actualizado con los últimos cambios",
+    "removed": "Ya no se comparte",
+    "error": "No se pudo. Inténtalo de nuevo.",
+    "link": "Link para compartir",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "sharedAt": "Foto del {date}. Los cambios posteriores no se ven hasta que lo actualices.",
+    "shareVia": "Enviar…",
+    "update": "Actualizar con los últimos cambios",
+    "remove": "Dejar de compartir",
+    "shareTitle": "Mi plan de comidas",
+    "shareText": "Mira el plan de comidas que armé con el Chef IA",
+    "needsSave": "Para compartir, el borrador tiene que estar guardado en la nube y ahora no se pudo guardar. Revisa tu conexión e inténtalo de nuevo.",
+    "retry": "Reintentar"
   }
 }

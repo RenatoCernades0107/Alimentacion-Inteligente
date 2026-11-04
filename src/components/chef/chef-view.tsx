@@ -3,7 +3,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { CalendarCheck, CloudOff, Menu, SlidersHorizontal, SquarePen, Wand2 } from "lucide-react";
+import { CalendarCheck, CloudOff, Menu, Share2, SlidersHorizontal, SquarePen, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { chefTurn } from "@/app/actions/chef";
@@ -13,6 +13,7 @@ import { DraftSidebar } from "@/components/chef/draft-sidebar";
 import { PlanPanel } from "@/components/chef/plan-panel";
 import { AlternativesDrawer, ApplyDrawer } from "@/components/chef/plan-drawers";
 import { PrefsPanel } from "@/components/chef/prefs-panel";
+import { ShareDrawer } from "@/components/chef/share-drawer";
 import { TasteStep } from "@/components/chef/taste-step";
 import {
   dayTargets, fallbackAlternatives, pasteClip, rebaseDraft, scopeDates, slotKey, tasteDeck,
@@ -39,6 +40,8 @@ export type ChefViewProps = {
   useExpiring: boolean;
   /** Borradores guardados (los más recientes primero). */
   drafts: DraftMeta[];
+  /** Borrador a abrir (?draft=), ej. al venir de un link compartido. */
+  openId: string | null;
 };
 
 /** Borrador abierto. `key` lo identifica en el cliente aunque todavía no tenga id en la base. */
@@ -49,6 +52,11 @@ const LAST_KEY = (u: string) => `chef:last:${u}`;
 const CLIP_KEY = (u: string) => `chef:clip:${u}`;
 /** Borrador de la versión anterior (uno solo, guardado en el dispositivo): se importa una vez. */
 const OLD_KEY = (u: string) => `chef:v1:${u}`;
+/**
+ * Copia en el dispositivo del borrador abierto. Si no se pudo guardar en la base (sin conexión, o la
+ * tabla aún no existe), la conversación no se pierde: al volver se recupera de aquí y se reintenta.
+ */
+const MIRROR_KEY = (u: string) => `chef:current:${u}`;
 
 /** Cuántos mensajes viajan al servidor (el servidor igual usa solo los últimos). */
 const HISTORY_SENT = 40;
@@ -81,6 +89,17 @@ function readClip(userId: string): MealClip | null {
   return null;
 }
 
+/** La copia local del borrador abierto (null si no hay o está dañada). */
+function readMirror(userId: string): (Current & { pending: boolean }) | null {
+  try {
+    const m = JSON.parse(store("get", MIRROR_KEY(userId)) ?? "null") as (Current & { pending: boolean }) | null;
+    if (!m || typeof m.key !== "string" || m.data?.v !== 2 || !m.data.prefs || !Array.isArray(m.data.messages) || typeof m.data.plan !== "object") return null;
+    return { key: m.key, id: typeof m.id === "string" ? m.id : null, title: typeof m.title === "string" ? m.title : "", data: m.data, pending: !!m.pending };
+  } catch {
+    return null;
+  }
+}
+
 /** El borrador de la versión anterior, convertido al formato nuevo (null si no hay o no sirve). */
 function readOldDraft(userId: string): DraftData | null {
   try {
@@ -108,7 +127,7 @@ function readOldDraft(userId: string): DraftData | null {
  * día, se cambian, copian y pegan platos, y se pasa al calendario.
  */
 export function ChefView(props: ChefViewProps) {
-  const { userId, firstName, today, start, cards, slots, mealsPerDay, myKcal, minor, isParent, initialGoal, useExpiring } = props;
+  const { userId, firstName, today, start, cards, slots, mealsPerDay, myKcal, minor, isParent, initialGoal, useExpiring, openId } = props;
   const t = useTranslations("chef");
 
   const freshData = (first: string, expiring = false): DraftData => ({
@@ -139,6 +158,7 @@ export function ChefView(props: ChefViewProps) {
   const [highlight, setHighlight] = useState<Set<string>>(new Set());
   const [clip, setClipState] = useState<MealClip | null>(null);
   const [saveError, setSaveError] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const highlightTimer = useRef<number | null>(null);
 
@@ -150,9 +170,16 @@ export function ChefView(props: ChefViewProps) {
   const queue = useRef<Promise<void>>(Promise.resolve());
   const dirty = useRef(false);
   const timer = useRef<number | null>(null);
+  const lastSaveFailed = useRef(false);
+  const warnedLocal = useRef(false);
   useEffect(() => {
     latest.current = current;
   }, [current]);
+
+  // Copia local del borrador abierto: "pending" mientras haya cambios que la base todavía no tiene.
+  useEffect(() => {
+    if (ready && hasContent(current.data)) store("set", MIRROR_KEY(userId), JSON.stringify({ ...current, pending: dirty.current || !current.id }));
+  }, [current, ready, userId]);
 
   const autoTitle = (d: DraftData) => {
     const first = d.messages.find((m) => m.role === "user")?.text.replace(/\s+/g, " ").trim();
@@ -168,11 +195,20 @@ export function ChefView(props: ChefViewProps) {
         ids.current.set(snap.key, meta.id);
         setDrafts((list) => [meta, ...list.filter((d) => d.id !== meta.id)]);
         setCurrent((c) => (c.key === snap.key && !c.id ? { ...c, id: meta.id } : c));
+        if (latest.current.key === snap.key && !dirty.current) {
+          store("set", MIRROR_KEY(userId), JSON.stringify({ ...latest.current, id: meta.id, pending: false }));
+        }
+        lastSaveFailed.current = false;
         setSaveError(false);
       } catch (e) {
         console.error("chef draft", e);
+        lastSaveFailed.current = true;
         setSaveError(true);
         if (latest.current.key === snap.key) dirty.current = true;
+        if (!warnedLocal.current) {
+          warnedLocal.current = true;
+          toast(t("drafts.savedLocally"));
+        }
       }
     });
     return queue.current;
@@ -184,6 +220,16 @@ export function ChefView(props: ChefViewProps) {
     if (!dirty.current) return queue.current;
     dirty.current = false;
     return save(latest.current);
+  };
+
+  /** Para compartir: guarda lo pendiente y devuelve el id del borrador (null si no se pudo guardar). */
+  const ensureSaved = async () => {
+    const c = latest.current;
+    if (!hasContent(c.data)) return null;
+    if (!c.id && !ids.current.get(c.key)) dirty.current = true;
+    await flush();
+    if (lastSaveFailed.current) return null;
+    return latest.current.id ?? ids.current.get(latest.current.key) ?? null;
   };
 
   const scheduleSave = () => {
@@ -261,8 +307,19 @@ export function ChefView(props: ChefViewProps) {
     setClipState(readClip(userId));
     const old = readOldDraft(userId);
     store("remove", OLD_KEY(userId));
+    const mirror = readMirror(userId);
     const forceNew = start !== today || useExpiring;
-    if (!forceNew && old && hasContent(old)) {
+    if (openId) {
+      window.history.replaceState(null, "", "/chef");
+      await openDraft(openId);
+    } else if (!forceNew && mirror?.pending && hasContent(mirror.data)) {
+      // Lo último que se escribió no llegó a la base: se recupera del dispositivo y se reintenta.
+      const { data } = rebaseDraft(mirror.data, today);
+      if (mirror.id) ids.current.set(mirror.key, mirror.id);
+      setCurrent({ key: mirror.key, id: mirror.id, title: mirror.title, data });
+      setTab("chat");
+      scheduleSave();
+    } else if (!forceNew && old && hasContent(old)) {
       const { data } = rebaseDraft(old, today);
       setCurrent({ key: newKey(), id: null, title: "", data });
       setTab(Object.keys(data.plan).length ? "plan" : "chat");
@@ -456,6 +513,11 @@ export function ChefView(props: ChefViewProps) {
               <CloudOff className="size-5" />
             </button>
           )}
+          {started && (
+            <button onClick={() => setShareOpen(true)} aria-label={t("share")} className="rounded-full p-2.5 active:bg-muted">
+              <Share2 className="size-5" />
+            </button>
+          )}
           <button onClick={() => setSettings(true)} aria-label={t("settings")} className="rounded-full p-2.5 active:bg-muted">
             <SlidersHorizontal className="size-5" />
           </button>
@@ -608,6 +670,8 @@ export function ChefView(props: ChefViewProps) {
           send("message", text);
         }}
       />
+
+      <ShareDrawer open={shareOpen} onOpenChange={setShareOpen} ensureSaved={ensureSaved} />
 
       <ApplyDrawer open={applyOpen} onOpenChange={setApplyOpen} entries={entries} dates={dates} cardMap={cardMap} isParent={isParent} />
     </div>

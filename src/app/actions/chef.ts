@@ -22,6 +22,9 @@ import en from "../../../messages/en.json";
 const MAX_HISTORY = 16;
 const MAX_TEXT = 2000;
 
+/** Mensajes que piden armar un plan (para usar el plan de respaldo si la IA falla). */
+const PLAN_REQUEST = /\b(arma|armar|armame|ármame|planifica|plan|men[uú]|semana|build|make|create|week|meal plan)\b/i;
+
 const Uuid = z.string().uuid();
 const Key = z.string().regex(/^\d{4}-\d{2}-\d{2}\|[a-z_]+$/);
 
@@ -84,10 +87,15 @@ export async function chefTurn(raw: ChefTurnInput): Promise<ChefReply> {
     );
     const reply = sanitizeReply(rawReply, ctx, searched);
     if (reply.message || reply.changes.length || reply.alternatives) return reply;
+    console.error("chef empty reply:", JSON.stringify(rawReply).slice(0, 800));
     throw new Error("empty chef reply");
   } catch (e) {
     console.error("chef", e);
-    if (input.intent !== "build") return { message: t("offlineMessage"), sources: [], quickReplies: [], changes: [], alternatives: null, offline: true };
+    // Sin IA: si se pidió armar el plan (o se escribió algo como "arma mi semana" con el plan vacío),
+    // igual se arma un plan base; si no, se avisa que el Chef no está disponible.
+    const scopedEmpty = !Object.keys(plan).some((k) => dates.includes(parseSlotKey(k).date));
+    const wantsPlan = input.intent === "build" || (scopedEmpty && PLAN_REQUEST.test(history[history.length - 1].text));
+    if (!wantsPlan) return { message: t("offlineMessage"), sources: [], quickReplies: [], changes: [], alternatives: null, offline: true };
     const next = fallbackPlan({
       cards, dates, slots, goal, prefs: prefs.prefs, liked: input.liked, disliked: input.disliked,
       busy: inScopeBusy.map(([k]) => k), plan,

@@ -236,6 +236,8 @@ export async function askChef(ctx: ChefContext, history: ChatMessage[]): Promise
     schema: RESPONSE_SCHEMA,
     temperature: 0.7,
     reasoningEffort: "low",
+    // La acción del servidor tiene 90 s: se deja margen para leer y validar.
+    budgetMs: 70_000,
     tools: canSearch ? [webSearchTool(searched)] : [],
   });
 
