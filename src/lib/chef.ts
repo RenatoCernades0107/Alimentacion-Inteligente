@@ -7,7 +7,7 @@
  * - Puntaje de cada plato según el objetivo y las preferencias; mazo para "calibrar tu gusto".
  * - Plan de respaldo sin IA (si la IA no responde) y validación de lo que propone la IA.
  */
-import { addDays } from "./dates";
+import { addDays, daysBetween } from "./dates";
 import { mealTypeForSlot } from "./meals";
 import { kcalPerServing, macrosPerServing, portionFor, slotShare, type NutritionItem } from "./nutrition";
 import type { Suggestion } from "./suggestions";
@@ -63,9 +63,42 @@ export type Plan = Partial<Record<SlotKey, PlanEntry>>;
 
 export type ChatMessage = { role: "user" | "model"; text: string };
 
+/** Página web que el Chef consultó para responder. */
+export type Source = { title: string; url: string };
+
+/** Mensaje tal como se muestra (y se guarda en el borrador). */
+export type UiMessage = {
+  role: "user" | "model";
+  text: string;
+  /** Respondió el respaldo sin IA (o hubo un error). */
+  offline?: boolean;
+  /** Fuentes de la web que usó el Chef. */
+  sources?: Source[];
+  /** Cuántas comidas del plan cambió esta respuesta. */
+  changes?: number;
+};
+
+/** Contenido de un borrador del Chef (lo que se guarda en `chef_drafts.data`). */
+export type DraftData = {
+  v: 2;
+  prefs: ChefPrefs;
+  liked: string[];
+  disliked: string[];
+  plan: Plan;
+  messages: UiMessage[];
+  quickReplies: string[];
+};
+
+/** Resumen de un borrador para la lista lateral. */
+export type DraftMeta = { id: string; title: string; updatedAt: string; start: string | null; meals: number };
+
 /** Lo que devuelve el Chef en cada turno (ya validado y con ids de receta). */
 export type ChefReply = {
   message: string;
+  /** Título corto para el borrador (solo lo propone en la primera respuesta). */
+  title?: string;
+  /** Páginas de la web que consultó (solo las que de verdad devolvió la búsqueda). */
+  sources: Source[];
   quickReplies: string[];
   /** Cambios al plan: poner (recipeId) o quitar (null) un plato de una franja. */
   changes: { key: SlotKey; recipeId: string | null; reason?: string }[];
@@ -329,6 +362,9 @@ export function fallbackAlternatives(cards: DishCard[], plan: Plan, key: SlotKey
 
 export type RawReply = {
   message?: string;
+  title?: string | null;
+  /** URLs que la IA dice haber usado; solo se aceptan las que devolvió la búsqueda. */
+  sources?: string[] | null;
   quick_replies?: string[];
   plan?: { date: string; slot: string; slug: string; reason?: string | null }[];
   remove?: { date: string; slot: string }[];
@@ -342,6 +378,8 @@ export type RawReply = {
 export function sanitizeReply(
   raw: RawReply,
   ctx: { cards: ReadonlyMap<string, DishCard>; slots: MealSlot[]; dates: ReadonlySet<string>; busy: ReadonlySet<string> },
+  /** Resultados de la búsqueda web de este turno (las fuentes se toman solo de aquí). */
+  searched: Source[] = [],
 ): ChefReply {
   const bySlug = new Map([...ctx.cards.values()].map((c) => [c.slug, c]));
   const validKey = (date: string, slot: string): SlotKey | null => {
@@ -379,10 +417,105 @@ export function sanitizeReply(
     if (key && options.length) alternatives = { key, options };
   }
 
+  // Fuentes: las que la IA citó (si estaban en la búsqueda); si no citó ninguna, las primeras encontradas.
+  const found = new Map(searched.map((r) => [r.url, r]));
+  const cited = [...new Set(raw.sources ?? [])].map((u) => found.get(u)).filter((r): r is Source => !!r);
+  const sources = (cited.length ? cited : searched).slice(0, 4);
+
   return {
-    message: clip(raw.message, 1200) ?? "",
+    message: clip(raw.message, 2400) ?? "",
+    title: clip(raw.title, 60),
+    sources,
     quickReplies: (raw.quick_replies ?? []).map((q) => q.trim().slice(0, 60)).filter(Boolean).slice(0, 4),
     changes,
     alternatives,
   };
+}
+
+// ──────────────────────────────────────── Copiar y pegar ────────────────────────────────────────
+
+/** Lo copiado: un plato suelto o las comidas de un día (por franja). */
+export type MealClip = { kind: "meal"; recipeId: string } | { kind: "day"; meals: Partial<Record<MealSlot, string>> };
+
+/** Copia las comidas de un día del plan (null si el día está vacío). */
+export function copyDay(plan: Plan, date: string, slots: MealSlot[]): MealClip | null {
+  const meals: Partial<Record<MealSlot, string>> = {};
+  for (const slot of slots) {
+    const entry = plan[slotKey(date, slot)];
+    if (entry) meals[slot] = entry.recipeId;
+  }
+  return Object.keys(meals).length ? { kind: "day", meals } : null;
+}
+
+/**
+ * Pega lo copiado en el plan. Un plato va a una franja (`targets` = [clave]); un día se pega en cada
+ * fecha de `targets` (franja por franja). Nunca toca franjas ocupadas en el calendario ni franjas que
+ * la familia no usa, y solo pega recetas que existen (`known`).
+ */
+export function pasteClip(
+  plan: Plan,
+  clip: MealClip,
+  targets: string[],
+  opts: { slots: MealSlot[]; busy: { has(key: string): boolean }; known: (recipeId: string) => boolean },
+): { plan: Plan; changed: SlotKey[] } {
+  const next: Plan = { ...plan };
+  const changed: SlotKey[] = [];
+  const put = (key: SlotKey, recipeId: string) => {
+    if (opts.busy.has(key) || !opts.known(recipeId) || !opts.slots.includes(parseSlotKey(key).slot)) return;
+    if (next[key]?.recipeId === recipeId) return;
+    next[key] = { recipeId };
+    changed.push(key);
+  };
+  if (clip.kind === "meal") {
+    for (const key of targets) put(key as SlotKey, clip.recipeId);
+  } else {
+    for (const date of targets) {
+      for (const slot of opts.slots) {
+        const id = clip.meals[slot];
+        if (id) put(slotKey(date, slot), id);
+      }
+    }
+  }
+  return { plan: next, changed };
+}
+
+/** Mueve todas las fechas del plan `shift` días (para reusar un borrador viejo desde hoy). */
+export function shiftPlan(plan: Plan, shift: number): Plan {
+  if (!shift) return plan;
+  const out: Plan = {};
+  for (const [key, entry] of Object.entries(plan)) {
+    if (!entry) continue;
+    const { date, slot } = parseSlotKey(key);
+    out[slotKey(addDays(date, shift), slot)] = entry;
+  }
+  return out;
+}
+
+/**
+ * Un borrador cuyo primer día ya pasó se reusa desde hoy: se corren el inicio y todas las fechas del
+ * plan. Devuelve el mismo objeto si no hace falta moverlo.
+ */
+export function rebaseDraft(data: DraftData, today: string): { data: DraftData; shifted: number } {
+  const shift = data.prefs.start < today ? daysBetween(data.prefs.start, today) : 0;
+  if (!shift) return { data, shifted: 0 };
+  return { data: { ...data, prefs: { ...data.prefs, start: today }, plan: shiftPlan(data.plan, shift) }, shifted: shift };
+}
+
+/** El plan como texto plano (para copiarlo y pegarlo en otra app, ej. WhatsApp). */
+export function planToText(
+  plan: Plan,
+  dates: string[],
+  slots: MealSlot[],
+  labels: { day: (date: string) => string; slot: (slot: MealSlot) => string; dish: (recipeId: string) => string | null },
+): string {
+  const blocks: string[] = [];
+  for (const date of dates) {
+    const lines = slots.flatMap((slot) => {
+      const entry = plan[slotKey(date, slot)];
+      const name = entry && labels.dish(entry.recipeId);
+      return name ? [`• ${labels.slot(slot)}: ${name}`] : [];
+    });
+    if (lines.length) blocks.push([labels.day(date), ...lines].join("\n"));
+  }
+  return blocks.join("\n\n");
 }

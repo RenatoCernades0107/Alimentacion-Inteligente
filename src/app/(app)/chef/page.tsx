@@ -4,13 +4,14 @@ import { isValidDate, todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
 import { loadMyTarget } from "@/lib/my-target";
 import { loadChefData } from "@/lib/chef-data";
+import { loadDraftList } from "@/lib/chef-drafts";
 import { defaultGoal } from "@/lib/chef";
 import { ChefView } from "@/components/chef/chef-view";
 
 /** La llamada a la IA corre como server action de esta ruta: se le da margen. */
-export const maxDuration = 60;
+export const maxDuration = 90;
 
-/** Chef IA: arma el plan de comidas conversando con IA y eligiendo platos. */
+/** Chef IA: chat para armar planes de comidas, guardados como borradores. */
 export default async function ChefPage({ searchParams }: PageProps<"/chef">) {
   const { date, use } = await searchParams;
   const { supabase, family, profile, isParent, user } = await requireMember();
@@ -18,9 +19,10 @@ export default async function ChefPage({ searchParams }: PageProps<"/chef">) {
   const today = todayIn(family.timezone);
   const start = isValidDate(date) && date > today ? date : today;
 
-  const [{ cards, busy }, target] = await Promise.all([
+  const [{ cards, busy }, target, drafts] = await Promise.all([
     loadChefData(supabase, family.id, today, locale),
     loadMyTarget(supabase, user.id, family.timezone),
+    loadDraftList(supabase),
   ]);
   const minor = !!target.minor;
 
@@ -39,6 +41,7 @@ export default async function ChefPage({ searchParams }: PageProps<"/chef">) {
       isParent={isParent}
       initialGoal={defaultGoal(target.direction, minor)}
       useExpiring={use === "expiring"}
+      drafts={drafts}
     />
   );
 }

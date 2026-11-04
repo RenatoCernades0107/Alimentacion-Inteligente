@@ -20,7 +20,7 @@ import es from "../../../messages/es.json";
 import en from "../../../messages/en.json";
 
 const MAX_HISTORY = 16;
-const MAX_TEXT = 600;
+const MAX_TEXT = 2000;
 
 const Uuid = z.string().uuid();
 const Key = z.string().regex(/^\d{4}-\d{2}-\d{2}\|[a-z_]+$/);
@@ -33,7 +33,7 @@ const TurnInput = z.object({
     prefs: z.array(z.enum(PREFS)).max(PREFS.length),
     start: z.string().refine(isValidDate),
   }),
-  history: z.array(z.object({ role: z.enum(["user", "model"]), text: z.string().max(2000) })).max(60),
+  history: z.array(z.object({ role: z.enum(["user", "model"]), text: z.string().max(4000) })).max(80),
   plan: z.record(Key, z.object({ recipeId: Uuid, reason: z.string().max(200).optional() })),
   liked: z.array(Uuid).max(60),
   disliked: z.array(Uuid).max(60),
@@ -68,13 +68,13 @@ export async function chefTurn(raw: ChefTurnInput): Promise<ChefReply> {
 
   const history = input.history
     .slice(-MAX_HISTORY)
-    .map((m) => ({ role: m.role, text: m.text.slice(0, m.role === "user" ? MAX_TEXT : 2000) }));
+    .map((m) => ({ role: m.role, text: m.text.slice(0, m.role === "user" ? MAX_TEXT : 2400) }));
   if (input.intent === "build") history.push({ role: "user", text: t("buildPrompt") });
   if (!history.length || history[history.length - 1].role !== "user") throw new Error("invalid");
 
   const ctx = { cards: cardMap, slots, dates: new Set(dates), busy: new Set<string>(busy.keys()) };
   try {
-    const rawReply = await askChef(
+    const { raw: rawReply, searched } = await askChef(
       {
         locale, name: profile.full_name?.split(" ")[0] ?? "", today, prefs, targets: dayTargets(target.kcal, goal), minor,
         weightKg: target.weightKg ?? null, goalKg: target.goalKg ?? null, mealsPerDay: family.meals_per_day, slots, dates,
@@ -82,18 +82,18 @@ export async function chefTurn(raw: ChefTurnInput): Promise<ChefReply> {
       },
       history,
     );
-    const reply = sanitizeReply(rawReply, ctx);
+    const reply = sanitizeReply(rawReply, ctx, searched);
     if (reply.message || reply.changes.length || reply.alternatives) return reply;
     throw new Error("empty chef reply");
   } catch (e) {
     console.error("chef", e);
-    if (input.intent !== "build") return { message: t("offlineMessage"), quickReplies: [], changes: [], alternatives: null, offline: true };
+    if (input.intent !== "build") return { message: t("offlineMessage"), sources: [], quickReplies: [], changes: [], alternatives: null, offline: true };
     const next = fallbackPlan({
       cards, dates, slots, goal, prefs: prefs.prefs, liked: input.liked, disliked: input.disliked,
       busy: inScopeBusy.map(([k]) => k), plan,
     });
     const changes = (Object.keys(next) as SlotKey[]).filter((k) => next[k]?.recipeId !== plan[k]?.recipeId).map((key) => ({ key, recipeId: next[key]!.recipeId }));
-    return { message: t("offlineBuilt"), quickReplies: [], changes, alternatives: null, offline: true };
+    return { message: t("offlineBuilt"), sources: [], quickReplies: [], changes, alternatives: null, offline: true };
   }
 }
 

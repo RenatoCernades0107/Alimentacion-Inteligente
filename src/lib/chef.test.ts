@@ -11,7 +11,13 @@ import {
   scoreCard,
   slotKey,
   tasteDeck,
+  copyDay,
+  pasteClip,
+  planToText,
+  rebaseDraft,
   type DishCard,
+  type DraftData,
+  type Plan,
 } from "./chef";
 import type { MealSlot } from "./types";
 
@@ -141,5 +147,80 @@ describe("validación de la respuesta de la IA", () => {
     );
     expect(r.alternatives).toEqual({ key: "2026-10-12|dinner", options: [{ recipeId: "ceviche", reason: undefined }, { recipeId: "lomo", reason: "Rico" }] });
     expect(sanitizeReply({ alternatives: { date: "2026-10-12", slot: "breakfast", options: [{ slug: "avena" }] } }, ctx).alternatives).toBeNull();
+  });
+});
+
+describe("fuentes de la búsqueda web", () => {
+  const ctx = { cards: byId, slots, dates: new Set(["2026-10-12"]), busy: new Set<string>() };
+  const searched = [
+    { title: "OMS", url: "https://www.who.int/a" },
+    { title: "NIH", url: "https://ods.od.nih.gov/b" },
+  ];
+  it("solo acepta URLs que devolvió la búsqueda", () => {
+    const r = sanitizeReply({ message: "x", sources: ["https://www.who.int/a", "https://inventada.com"] }, ctx, searched);
+    expect(r.sources).toEqual([searched[0]]);
+  });
+  it("si no citó ninguna, muestra lo encontrado; sin búsqueda, nada", () => {
+    expect(sanitizeReply({ message: "x" }, ctx, searched).sources).toEqual(searched);
+    expect(sanitizeReply({ message: "x", sources: ["https://www.who.int/a"] }, ctx).sources).toEqual([]);
+  });
+});
+
+describe("copiar y pegar comidas", () => {
+  const plan: Plan = {
+    [slotKey("2026-10-12", "breakfast")]: { recipeId: "avena" },
+    [slotKey("2026-10-12", "lunch")]: { recipeId: "pollo", reason: "proteína" },
+  };
+  const opts = { slots, busy: new Set([slotKey("2026-10-14", "lunch")]), known: (id: string) => byId.has(id) };
+
+  it("copia un día (null si está vacío)", () => {
+    expect(copyDay(plan, "2026-10-12", slots)).toEqual({ kind: "day", meals: { breakfast: "avena", lunch: "pollo" } });
+    expect(copyDay(plan, "2026-10-13", slots)).toBeNull();
+  });
+
+  it("pega un plato en franjas, sin tocar las ocupadas ni recetas desconocidas", () => {
+    const r = pasteClip(plan, { kind: "meal", recipeId: "ceviche" }, [slotKey("2026-10-12", "dinner"), slotKey("2026-10-14", "lunch")], opts);
+    expect(r.changed).toEqual([slotKey("2026-10-12", "dinner")]);
+    expect(r.plan[slotKey("2026-10-12", "dinner")]).toEqual({ recipeId: "ceviche" });
+    expect(plan[slotKey("2026-10-12", "dinner")]).toBeUndefined();
+    expect(pasteClip(plan, { kind: "meal", recipeId: "no-existe" }, [slotKey("2026-10-12", "dinner")], opts).changed).toEqual([]);
+  });
+
+  it("pega un día en varios días y salta las franjas ocupadas", () => {
+    const clip = copyDay(plan, "2026-10-12", slots)!;
+    const r = pasteClip(plan, clip, ["2026-10-13", "2026-10-14"], opts);
+    expect(r.changed).toEqual([
+      slotKey("2026-10-13", "breakfast"),
+      slotKey("2026-10-13", "lunch"),
+      slotKey("2026-10-14", "breakfast"),
+    ]);
+    // Pegar sobre sí mismo no cambia nada.
+    expect(pasteClip(plan, clip, ["2026-10-12"], opts).changed).toEqual([]);
+  });
+
+  it("arma el plan como texto", () => {
+    const text = planToText(plan, ["2026-10-12", "2026-10-13"], slots, { day: (d) => d, slot: (s) => s, dish: (id) => id });
+    expect(text).toBe("2026-10-12\n• breakfast: avena\n• lunch: pollo");
+  });
+});
+
+describe("borradores", () => {
+  const draft: DraftData = {
+    v: 2,
+    prefs: { goal: "healthy", scope: "week", prefs: [], start: "2026-10-10" },
+    liked: [],
+    disliked: [],
+    plan: { [slotKey("2026-10-10", "lunch")]: { recipeId: "pollo" }, [slotKey("2026-10-12", "dinner")]: { recipeId: "lomo" } },
+    messages: [],
+    quickReplies: [],
+  };
+  it("un borrador de días pasados se mueve para empezar hoy", () => {
+    const { data, shifted } = rebaseDraft(draft, "2026-10-13");
+    expect(shifted).toBe(3);
+    expect(data.prefs.start).toBe("2026-10-13");
+    expect(Object.keys(data.plan)).toEqual([slotKey("2026-10-13", "lunch"), slotKey("2026-10-15", "dinner")]);
+  });
+  it("uno vigente queda igual", () => {
+    expect(rebaseDraft(draft, "2026-10-10").data).toBe(draft);
   });
 });

@@ -13,10 +13,10 @@ PWA para gestionar el inventario de comida de la familia y planificar sus comida
 | `src/app/api/off/` | Proxy a Open Food Facts (búsqueda y código de barras) |
 | `src/app/api/cron/daily/` | Recordatorios diarios (vencimientos, días sin comidas, comidas sin completar) |
 | `src/lib/` | Lógica: recurrencias, sugerencias, unidades, push, y el cálculo de peso y calorías (`body.ts`, `nutrition.ts`, `portions.ts`, `family-targets.ts`) |
-| `src/lib/chef*.ts`, `src/components/chef/` | Chef IA: lógica del planificador (`chef.ts`), llamada a la IA (`chef-ai.ts`) y pantallas |
+| `src/lib/chef*.ts`, `src/components/chef/` | Chef IA: lógica del planificador (`chef.ts`), llamada a la IA (`chef-ai.ts`), borradores (`chef-drafts.ts`), búsqueda web (`web-search.ts`) y pantallas |
 | `src/app/api/recipes/[id]/image/` | Genera con IA la foto de una receta que no tiene (`src/lib/dish-image.ts`) |
 | `src/app/api/meals/[id]/portions/` | Tabla de porciones de una comida (se pide al abrirla) |
-| `supabase/tests/` | Pruebas de permisos (RLS + funciones) en SQL: `body_rls.sql`, `recipes_rls.sql` (se corren igual: sobre una base desechable con migraciones y seed aplicados) |
+| `supabase/tests/` | Pruebas de permisos (RLS + funciones) en SQL: `body_rls.sql`, `recipes_rls.sql`, `chef_drafts_rls.sql` (se corren igual: sobre una base desechable con migraciones y seed aplicados) |
 | `supabase/migrations/` | Esquema, RLS (permisos padres/hijos) y funciones |
 | `supabase/data/` | Catálogo de alimentos, sus kcal (`nutrition.mjs`) y recetas (Perú / USA) → `node scripts/build-seed.mjs` genera `supabase/seed.sql` |
 | `messages/` | Textos en español e inglés |
@@ -35,14 +35,17 @@ Pruebas: `npm test` (fórmulas, porciones, datos de nutrición, traducciones) y 
 
 ## Chef IA
 
-Pestaña central para armar el plan de comidas de hoy, mañana o la semana con IA:
+Pestaña central con una interfaz de chat al estilo ChatGPT para armar planes de comidas de hoy, mañana o la semana:
 
-1. **Objetivo y preferencias:** bajar grasa, ganar músculo, mantener, comer más sano o energía para entrenar (a los menores no se les ofrece bajar), con chips de "con lo que tengo", "lo que vence", rápido, peruano/americano y sin carne. La meta de kcal sale de `/weight`; los macros del día se reparten según el objetivo (`GOAL_SPLIT` en `src/lib/chef.ts`).
-2. **Calibrar el gusto:** un mazo de ~12 platos con foto, kcal, macros e ingredientes en casa; se desliza → me gusta / ← paso (también con botones o flechas del teclado).
-3. **Plan:** La IA arma el plan con esos gustos y se ve por día con un anillo de kcal y barras de proteína / carbos / grasa frente a la meta, usando la porción de quien mira (igual que el calendario). Cada plato se puede cambiar deslizando alternativas o quitar, y se conversa con el Chef ("más proteína en las cenas") con respuestas rápidas.
-4. **Al calendario:** los padres lo agregan como comidas planificadas; los hijos lo envían como propuestas (un solo aviso a los padres). Las franjas que ya tienen comida nunca se tocan.
+- **Borradores:** cada conversación es un borrador (mensajes + plan + ajustes) que se guarda solo en la tabla `chef_drafts` (personal: RLS por usuario y familia). El menú ☰ lista los borradores (hoy / últimos 7 días / anteriores) para abrirlos, buscarlos, renombrarlos, duplicarlos o eliminarlos; ✏️ empieza uno nuevo. El título lo propone la IA en su primera respuesta. Un borrador de días pasados se reusa desde hoy (se corren sus fechas). El borrador de la versión anterior (en `localStorage`) se importa una vez.
+- **Chat:** pantalla inicial con sugerencias ("Arma mi semana", "Mañana alto en proteína", "Usa lo que vence", dudas de nutrición) y la opción de **calibrar el gusto** deslizando ~12 platos (→ me gusta / ← paso). Las respuestas admiten negrita y listas, se pueden copiar y, cuando cambian el plan, muestran una tarjeta para ir a él. Respuestas rápidas sugeridas por el Chef.
+- **Ajustes** (⚙️): objetivo (bajar grasa, ganar músculo, mantener, comer más sano o energía; a los menores no se les ofrece bajar), días y preferencias ("con lo que tengo", "lo que vence", rápido, peruano/americano, sin carne). La meta de kcal sale de `/weight`; los macros se reparten según el objetivo (`GOAL_SPLIT` en `src/lib/chef.ts`).
+- **Plan:** por día, con un anillo de kcal y barras de proteína / carbos / grasa frente a la meta (porción de quien mira, igual que el calendario). Cada plato se cambia deslizando alternativas, se quita, se **copia y se pega** en otra franja, y un día entero se copia y pega en otro día o en todos (lo copiado queda en el dispositivo, así que también sirve entre borradores). El plan se puede copiar como texto para compartirlo.
+- **Al calendario:** los padres lo agregan como comidas planificadas; los hijos lo envían como propuestas (un solo aviso a los padres). Las franjas que ya tienen comida nunca se tocan. El borrador queda guardado.
 
-La IA solo elige recetas del catálogo visible para la familia (por slug); kcal y macros los calcula la app, y todo lo que responde se valida (`sanitizeReply`). Si la IA no está disponible, el Chef arma un plan base con reglas (`fallbackPlan`). El borrador se guarda en el dispositivo (`localStorage`).
+**IA:** el prompt (`src/lib/chef-ai.ts`) define el rol (nutricionista-cocinero), principios para un buen plan (proteína repartida, variedad, equilibrio, ajuste al objetivo), qué devolver en cada caso y límites de seguridad (menores, condiciones médicas, mínimo de kcal, solo temas de comida y salud). La IA solo elige recetas del catálogo visible para la familia (por slug); kcal y macros los calcula la app, y todo lo que responde se valida (`sanitizeReply`). Si la IA no está disponible, el Chef arma un plan base con reglas (`fallbackPlan`).
+
+**Búsqueda web:** con `TAVILY_API_KEY`, el Chef puede llamar la herramienta `buscar_web` (tool calling, `completeJsonWithTools` en `src/lib/ai.ts`) para dudas de nutrición o salud. La restricción no depende solo del prompt: la búsqueda solo consulta una lista cerrada de sitios de salud y alimentación (OMS, OPS, FAO, MINSA/INS, NIH, CDC, Harvard, Mayo Clinic…; `HEALTH_DOMAINS` en `src/lib/web-search.ts`), rechaza consultas que no son de alimentación o salud y descarta resultados de otros sitios. Las fuentes que se muestran son solo URLs que de verdad devolvió la búsqueda.
 
 **Macros:** proteína, carbohidratos y grasa por 100 g de cada alimento del catálogo (`macros` en `supabase/data/nutrition.mjs`, mismas fuentes que las kcal y también aproximados). Los de una receta se calculan de sus ingredientes al leerla (`macrosPerServing`), así que también funcionan para recetas propias.
 
