@@ -706,6 +706,8 @@ export function ChefView(props: ChefViewProps) {
       <AlternativesDrawer
         alternatives={alternatives}
         cardMap={cardMap}
+        current={alternatives ? data.plan[alternatives.key]?.recipeId : undefined}
+        targets={targets}
         myKcal={myKcal}
         mealsPerDay={mealsPerDay}
         onClose={() => setAlternatives(null)}

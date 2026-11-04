@@ -872,7 +872,7 @@
     "placeholder": "Pídele algo al Chef…",
     "send": "Enviar",
     "altTitle": "Opciones para el {slot} del {day}",
-    "altHint": "Desliza → para elegir, ← para ver otra.",
+    "altHint": "Compara las opciones y elige la que más te convenga.",
     "picked": "Listo: {name}",
     "altEmpty": "No me quedan más opciones con tus preferencias.",
     "moreIdeas": "Dame más opciones para el {slot} del {day}.",
@@ -984,6 +984,22 @@
       "view": "Ver receta",
       "willSave": "{count, plural, one {Se guardará # receta nueva en Recetas.} other {Se guardarán # recetas nuevas en Recetas.}}",
       "saved": "{count, plural, one {# receta nueva guardada en Recetas.} other {# recetas nuevas guardadas en Recetas.}}"
+    },
+    "alt": {
+      "goal": "Tu meta para el {slot}",
+      "sort": {
+        "best": "Sugeridas",
+        "protein": "Más proteína",
+        "light": "Menos kcal",
+        "quick": "Más rápidas"
+      },
+      "current": "Ahora en tu plan",
+      "perServing": "1 porción",
+      "yours": "Tu porción ({portion})",
+      "noData": "Esta receta no tiene datos nutricionales.",
+      "choose": "Elegir este plato",
+      "vsGoal": "Meta: {goal}",
+      "split": "Distribución de calorías por macro"
     }
   },
   "share": {
