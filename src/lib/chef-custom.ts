@@ -173,11 +173,12 @@ export function customToRecipeInput(r: CustomRecipe, locale: "es" | "en"): Recip
 }
 
 /**
- * Deja en el borrador las recetas nuevas que usa el plan y, de las demás, las más recientes hasta
+ * Deja en el borrador las recetas nuevas que usa el plan (o `alsoKeep`, ej. cambios al calendario sin
+ * confirmar) y, de las demás, las más recientes hasta
  * `MAX_CUSTOM` (para no perder una que se quitó y se quiere volver a poner).
  */
-export function pruneCustom(custom: DraftData["custom"], plan: Plan): DraftData["custom"] {
-  const inPlan = new Set(Object.values(plan).flatMap((e) => (e ? [e.recipeId] : [])));
+export function pruneCustom(custom: DraftData["custom"], plan: Plan, alsoKeep: Iterable<string> = []): DraftData["custom"] {
+  const inPlan = new Set([...Object.values(plan).flatMap((e) => (e ? [e.recipeId] : [])), ...alsoKeep]);
   const entries = Object.entries(custom);
   const keep = entries.filter(([id]) => inPlan.has(id));
   const rest = entries.filter(([id]) => !inPlan.has(id)).slice(-Math.max(0, MAX_CUSTOM - keep.length));

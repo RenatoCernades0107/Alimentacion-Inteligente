@@ -116,3 +116,11 @@ describe("pruneCustom y replaceRecipeIds", () => {
     expect(replaceRecipeIds(plan, { tmp: "real" })).toEqual({ "2026-10-10|lunch": { recipeId: "real", reason: "x" }, "2026-10-10|dinner": { recipeId: "otro" } });
   });
 });
+
+describe("pruneCustom con recetas en cambios pendientes", () => {
+  it("conserva también las de alsoKeep", () => {
+    const dish = (id: string) => ({ card: { id }, recipe: {} }) as unknown as CustomDish;
+    const custom = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`id${i}`, dish(`id${i}`)]));
+    expect(Object.keys(pruneCustom(custom, {}, ["id1"]))).toContain("id1");
+  });
+});

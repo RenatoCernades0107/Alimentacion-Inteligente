@@ -1000,6 +1000,22 @@
       "choose": "Elegir este plato",
       "vsGoal": "Meta: {goal}",
       "split": "Distribución de calorías por macro"
+    },
+    "dropped": "{count, plural, one {# cambio que pidió el Chef no se pudo aplicar.} other {# cambios que pidió el Chef no se pudieron aplicar.}}",
+    "calendar": {
+      "title": "{count, plural, one {Propongo # cambio en tu calendario} other {Propongo # cambios en tu calendario}}",
+      "remove": "Quitar",
+      "unknownDish": "Plato ya no disponible",
+      "apply": "Aplicar al calendario",
+      "propose": "Enviar a tus padres",
+      "dismiss": "Descartar",
+      "applied": "Aplicado en tu calendario",
+      "dismissed": "Descartado",
+      "kidNote": "Tus padres verán los platos nuevos como propuestas para aceptarlas.",
+      "done": "{count, plural, one {# cambio aplicado en tu calendario} other {# cambios aplicados en tu calendario}}",
+      "skipped": "{count, plural, one {# franja cambió mientras tanto y la salté.} other {# franjas cambiaron mientras tanto y las salté.}}",
+      "nothing": "No había nada que cambiar.",
+      "pendingChip": "Cambio propuesto"
     }
   },
   "share": {

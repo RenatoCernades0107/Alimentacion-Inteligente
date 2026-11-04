@@ -16,6 +16,8 @@ import {
   planToText,
   rebaseDraft,
   migrateDraft,
+  calendarOps,
+  type CalendarMeal,
   type CustomDish,
   type DishCard,
   type DraftData,
@@ -286,5 +288,71 @@ describe("migración de borradores", () => {
     const d = { v: 3, custom: {} };
     expect(migrateDraft(d)).toBe(d);
     expect(migrateDraft(null)).toBe(null);
+  });
+});
+
+describe("cambios a comidas que ya están en el calendario", () => {
+  const meal = (id: string, over: Partial<CalendarMeal> = {}): CalendarMeal => ({ id, name: id, status: "planned", seriesId: null, recipeId: null, ...over });
+  const lunch = slotKey("2026-10-12", "lunch");
+  const dinner = slotKey("2026-10-12", "dinner");
+  const later = slotKey("2026-10-20", "breakfast");
+  const calendar = new Map<string, CalendarMeal[]>([
+    [lunch, [meal("m1", { name: "Lomo saltado", recipeId: "lomo" })]],
+    [dinner, [meal("m2", { name: "Cena hecha", status: "completed" })]],
+    [later, [meal("m3", { name: "Pan con palta", seriesId: "s1" })]],
+  ]);
+  const ctx = { cards: byId, slots, dates: new Set(["2026-10-12"]), busy: new Set<string>([lunch, dinner, later]), calendar };
+
+  it("una franja ocupada en 'plan' se propone como cambio al calendario (no se pierde)", () => {
+    const r = sanitizeReply({ message: "ok", plan: [{ date: "2026-10-12", slot: "lunch", slug: "pollo", reason: "más proteína" }] }, ctx);
+    expect(r.changes).toEqual([]);
+    expect(r.calendar).toEqual([{ key: lunch, recipeId: "pollo", reason: "más proteína", before: "Lomo saltado", mealIds: ["m1"] }]);
+    expect(r.dropped).toBe(0);
+  });
+  it("'calendar' acepta quitar (slug null) y fechas fuera del plan que están en el calendario", () => {
+    const r = sanitizeReply({ message: "ok", calendar: [{ date: "2026-10-20", slot: "breakfast", slug: null }] }, ctx);
+    expect(r.calendar).toEqual([{ key: later, recipeId: null, reason: undefined, before: "Pan con palta", mealIds: ["m3"] }]);
+  });
+  it("las comidas completadas no se cambian y se cuentan como descartadas", () => {
+    const r = sanitizeReply({ message: "ok", calendar: [{ date: "2026-10-12", slot: "dinner", slug: "pollo" }] }, ctx);
+    expect(r.calendar).toEqual([]);
+    expect(r.dropped).toBe(1);
+  });
+  it("poner el mismo plato que ya está no es un cambio", () => {
+    expect(sanitizeReply({ message: "ok", calendar: [{ date: "2026-10-12", slot: "lunch", slug: "lomo" }] }, ctx).calendar).toEqual([]);
+  });
+  it("cuenta los platos o franjas inválidos", () => {
+    const r = sanitizeReply(
+      { message: "ok", plan: [{ date: "2026-10-12", slot: "lunch", slug: "no-existe" }], calendar: [{ date: "2030-01-01", slot: "lunch", slug: "pollo" }] },
+      ctx,
+    );
+    expect(r.dropped).toBe(2);
+  });
+  it("'calendar' sobre una franja libre del plan es un cambio normal", () => {
+    const r = sanitizeReply({ message: "ok", calendar: [{ date: "2026-10-12", slot: "breakfast", slug: "avena" }] }, ctx);
+    expect(r.changes).toEqual([{ key: slotKey("2026-10-12", "breakfast"), recipeId: "avena", reason: undefined }]);
+  });
+
+  describe("calendarOps", () => {
+    it("borra sueltas, cancela las de una serie y agrega el plato nuevo", () => {
+      const ops = calendarOps(
+        [
+          { key: lunch, recipeId: "pollo", before: "", mealIds: ["m1"] },
+          { key: later, recipeId: null, before: "", mealIds: ["m3"] },
+        ],
+        calendar,
+      );
+      expect(ops).toEqual({ remove: ["m1"], cancel: ["m3"], insert: [{ key: lunch, recipeId: "pollo" }], skipped: [] });
+    });
+    it("si la franja cambió desde la propuesta, se salta", () => {
+      const now = new Map(calendar);
+      now.set(lunch, [meal("otra")]);
+      expect(calendarOps([{ key: lunch, recipeId: "pollo", before: "", mealIds: ["m1"] }], now).skipped).toEqual([lunch]);
+    });
+    it("nunca toca las completadas", () => {
+      const ops = calendarOps([{ key: dinner, recipeId: "pollo", before: "", mealIds: [] }], calendar);
+      expect(ops.remove).toEqual([]);
+      expect(ops.insert).toEqual([{ key: dinner, recipeId: "pollo" }]);
+    });
   });
 });

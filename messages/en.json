@@ -1000,6 +1000,22 @@
       "choose": "Pick this dish",
       "vsGoal": "Target: {goal}",
       "split": "Calorie split by macro"
+    },
+    "dropped": "{count, plural, one {# change the Chef asked for couldn't be applied.} other {# changes the Chef asked for couldn't be applied.}}",
+    "calendar": {
+      "title": "{count, plural, one {I suggest # change to your calendar} other {I suggest # changes to your calendar}}",
+      "remove": "Remove",
+      "unknownDish": "Dish no longer available",
+      "apply": "Apply to calendar",
+      "propose": "Send to your parents",
+      "dismiss": "Dismiss",
+      "applied": "Applied to your calendar",
+      "dismissed": "Dismissed",
+      "kidNote": "Your parents will see the new dishes as proposals to accept.",
+      "done": "{count, plural, one {# change applied to your calendar} other {# changes applied to your calendar}}",
+      "skipped": "{count, plural, one {# slot changed in the meantime and was skipped.} other {# slots changed in the meantime and were skipped.}}",
+      "nothing": "There was nothing to change.",
+      "pendingChip": "Suggested change"
     }
   },
   "share": {
