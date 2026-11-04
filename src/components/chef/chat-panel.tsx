@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ArrowUp, Brain, Check, ChevronRight, Copy, ExternalLink, Globe, Heart, LayoutList, Loader2, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowUp, Brain, CalendarClock, Check, ChevronRight, Copy, ExternalLink, Globe, Heart, LayoutList, Loader2, SlidersHorizontal, Sparkles } from "lucide-react";
 import { RichText } from "@/components/chef/rich-text";
 import { GOAL_EMOJI } from "@/components/chef/prefs-panel";
-import type { ChefPrefs, DayTargets, Thinking, UiMessage } from "@/lib/chef";
+import { parseSlotKey, type CalendarProposal, type ChefPrefs, type DayTargets, type Thinking, type UiMessage } from "@/lib/chef";
+import { parseDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 /** Sugerencia de la pantalla vacía: el texto que se envía y, si aplica, cómo deja los ajustes. */
@@ -85,7 +86,15 @@ export function Welcome({
 export type LiveThinking = { steps: string[]; text: string; startedAt: number };
 
 /** Conversación: burbujas del usuario a la derecha y respuestas del Chef a todo el ancho. */
-export function Messages({ messages, live, onShowPlan }: { messages: UiMessage[]; live: LiveThinking | null; onShowPlan: () => void }) {
+export function Messages({
+  messages, live, onShowPlan, calendar,
+}: {
+  messages: UiMessage[];
+  live: LiveThinking | null;
+  onShowPlan: () => void;
+  /** Para los cambios propuestos al calendario (sin esto, la tarjeta solo se muestra). */
+  calendar?: CalendarActions;
+}) {
   const pending = !!live;
   const t = useTranslations("chef");
   const end = useRef<HTMLDivElement>(null);
@@ -134,6 +143,8 @@ export function Messages({ messages, live, onShowPlan }: { messages: UiMessage[]
               >
                 <RichText text={m.text} />
               </div>
+              {!!m.dropped && <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-300">⚠️ {t("dropped", { count: m.dropped })}</p>}
+              {m.calendar && m.calendar.changes.length > 0 && <CalendarCard index={i} proposal={m.calendar} actions={calendar} />}
               {!!m.changes && (
                 <button
                   onClick={onShowPlan}
@@ -189,6 +200,81 @@ export function Messages({ messages, live, onShowPlan }: { messages: UiMessage[]
       )}
       <div ref={end} />
     </ul>
+  );
+}
+
+export type CalendarActions = {
+  /** Nombre del plato (null si ya no existe). */
+  dishName: (recipeId: string) => string | null;
+  /** Índice del mensaje cuyos cambios se están aplicando. */
+  applying: number | null;
+  /** Solo se puede aplicar si no hay otra cosa en curso. */
+  disabled: boolean;
+  isParent: boolean;
+  onApply: (index: number) => void;
+  onDismiss: (index: number) => void;
+};
+
+/** Cambios que el Chef propone a comidas que ya están en el calendario: se aplican al confirmar. */
+function CalendarCard({ index, proposal, actions }: { index: number; proposal: CalendarProposal; actions?: CalendarActions }) {
+  const t = useTranslations("chef");
+  const ts = useTranslations("slots");
+  const locale = useLocale();
+  const day = new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const applying = actions?.applying === index;
+  const done = proposal.status !== "pending";
+  return (
+    <div className={cn("mt-2.5 rounded-2xl border bg-card p-3 shadow-sm", done && "opacity-70")}>
+      <p className="flex items-center gap-2 text-sm font-semibold">
+        <span className="flex size-7 items-center justify-center rounded-lg bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/50 dark:text-fuchsia-300">
+          <CalendarClock className="size-4" />
+        </span>
+        {t("calendar.title", { count: proposal.changes.length })}
+      </p>
+      <ul className="mt-2 space-y-2">
+        {proposal.changes.map((c) => {
+          const { date, slot } = parseSlotKey(c.key);
+          const after = c.recipeId ? actions?.dishName(c.recipeId) : null;
+          return (
+            <li key={c.key} className="text-sm">
+              <p className="text-xs font-medium text-muted-foreground capitalize">
+                {day.format(parseDate(date))} · {ts(slot)}
+              </p>
+              <p className="flex flex-wrap items-center gap-x-1.5 leading-snug">
+                <span className="text-muted-foreground line-through decoration-muted-foreground/50">{c.before}</span>
+                <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="font-medium">{c.recipeId ? (after ?? t("calendar.unknownDish")) : t("calendar.remove")}</span>
+              </p>
+              {c.reason && <p className="text-xs text-muted-foreground">✨ {c.reason}</p>}
+            </li>
+          );
+        })}
+      </ul>
+      {proposal.status === "pending" && actions ? (
+        <>
+          {!actions.isParent && <p className="mt-2 text-xs text-muted-foreground">{t("calendar.kidNote")}</p>}
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={() => actions.onApply(index)}
+              disabled={actions.disabled || applying}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary py-2 text-sm font-semibold text-primary-foreground active:scale-[0.98] disabled:opacity-60"
+            >
+              {applying ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+              {applying ? t("applying") : actions.isParent ? t("calendar.apply") : t("calendar.propose")}
+            </button>
+            <button
+              onClick={() => actions.onDismiss(index)}
+              disabled={applying}
+              className="rounded-xl bg-muted px-3 py-2 text-sm font-semibold active:bg-muted/70 disabled:opacity-60"
+            >
+              {t("calendar.dismiss")}
+            </button>
+          </div>
+        </>
+      ) : (
+        done && <p className="mt-2 text-xs font-medium text-muted-foreground">{proposal.status === "applied" ? `✓ ${t("calendar.applied")}` : t("calendar.dismissed")}</p>
+      )}
+    </div>
   );
 }
 

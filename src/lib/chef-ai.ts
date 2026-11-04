@@ -3,6 +3,7 @@ import { z } from "zod";
 import { completeJsonWithTools, requireModel, type Tool } from "./ai";
 import { parseSlotKey, type ChatMessage, type ChefPrefs, type CustomDish, type DayTargets, type DishCard, type Plan, type RawReply, type Source } from "./chef";
 import { MAX_NEW_PER_TURN, customSlug, type ChefFood } from "./chef-custom";
+import { profileLines, type ChefProfile } from "./chef-profile";
 import { hasWebSearch, isFoodHealthQuery, searchHealthWeb } from "./web-search";
 import type { MealSlot } from "./types";
 
@@ -38,6 +39,21 @@ const RESPONSE_SCHEMA = {
           slot: { type: "string" },
           slug: { type: "string", description: "slug exacto de una receta del catálogo, o el 'ref' de una receta de new_recipes" },
           reason: { type: ["string", "null"], description: "Por qué este plato (máx. 90 caracteres), ligado al objetivo o a lo que hay en casa." },
+        },
+        required: ["date", "slot", "slug"],
+      },
+    },
+    calendar: {
+      type: ["array", "null"],
+      description:
+        "Cambios a comidas que YA ESTÁN EN EL CALENDARIO (sección 'Calendario'). Cada uno reemplaza lo que hay en esa franja por el plato 'slug' (catálogo o 'ref' de una receta nueva), o lo quita si slug es null. La persona los confirma antes de aplicarse.",
+      items: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "YYYY-MM-DD" },
+          slot: { type: "string" },
+          slug: { type: ["string", "null"], description: "Plato nuevo; null = solo quitar lo que hay" },
+          reason: { type: ["string", "null"], description: "Por qué el cambio (máx. 90 caracteres)" },
         },
         required: ["date", "slot", "slug"],
       },
@@ -117,6 +133,10 @@ const ReplySchema = z.object({
     .object({ date: z.string(), slot: z.string(), options: z.array(z.object({ slug: z.string(), reason: z.string().nullish() })) })
     .nullish()
     .catch(null),
+  calendar: z
+    .array(z.object({ date: z.string(), slot: z.string(), slug: z.string().nullish(), reason: z.string().nullish() }))
+    .nullish()
+    .catch(null),
   // Se valida a fondo en src/lib/chef-custom.ts (parseNewRecipe); aquí solo que tenga forma de lista.
   new_recipes: z.array(z.record(z.string(), z.unknown())).nullish().catch(null),
 });
@@ -145,8 +165,8 @@ export type ChefContext = {
   prefs: ChefPrefs;
   targets: DayTargets;
   minor: boolean;
-  weightKg: number | null;
-  goalKg: number | null;
+  /** Datos corporales y metas (src/lib/chef-profile.ts). */
+  profile: ChefProfile | null;
   mealsPerDay: number;
   slots: MealSlot[];
   dates: string[];
@@ -159,6 +179,16 @@ export type ChefContext = {
   foods: ChefFood[];
   /** Recetas nuevas que ya están en el borrador. */
   custom: CustomDish[];
+  /** Comidas en el calendario (próximos días), por franja: se pueden proponer cambios. */
+  calendar: { key: string; meals: string; locked: boolean }[];
+  /** Lo que la familia comió los últimos días. */
+  history: { date: string; slot: string; name: string; done: boolean }[];
+  /** Despensa: lo que hay en casa (nombre, cantidad, vencimiento). */
+  pantry: { name: string; quantity: number; unit: string; expires: string | null }[];
+  /** Otros integrantes (solo nombre y kcal: los platos los comen todos). */
+  family: { name: string; kcal: number | null }[];
+  /** Recetas favoritas (slugs). */
+  favorites: string[];
 };
 
 /** Lo que va haciendo el Chef, para mostrarlo mientras piensa. */
@@ -208,20 +238,22 @@ Eres "Chef IA", nutricionista-cocinero de una app familiar peruana de planificac
 # La persona
 - Hoy: ${ctx.today}.
 - Objetivo: ${GOAL_TEXT[ctx.prefs.goal]}.
-- Meta diaria: ${t.kcal} kcal · proteína ${t.protein} g · carbohidratos ${t.carbs} g · grasa ${t.fat} g${t.estimated ? " (referencial: aún no completa peso y estatura; puedes sugerirle completarlos en la sección Peso)" : ""}.${ctx.weightKg ? ` Peso actual ~${ctx.weightKg} kg.` : ""}${ctx.goalKg ? ` Meta de peso ${ctx.goalKg} kg.` : ""}
+- Meta diaria (calculada por la app con sus datos): ${t.kcal} kcal · proteína ${t.protein} g · carbohidratos ${t.carbs} g · grasa ${t.fat} g${t.estimated ? " (referencial: aún no completa peso y estatura; puedes sugerirle completarlos en la sección Peso)" : ""}.
+${profileLines(ctx.profile).join("\n")}
 ${ctx.minor ? "- ES MENOR DE EDAD: nunca propongas déficit calórico, dietas para bajar de peso, ayunos ni restricciones; enfócate en variedad, crecimiento y hábitos.\n" : ""}- Preferencias: ${ctx.prefs.prefs.length ? ctx.prefs.prefs.map((p) => PREF_TEXT[p]).join("; ") : "ninguna en particular"}.
 - Le gustan: ${ctx.liked.map(slugOf).join(", ") || "—"}.
 - No le gustan (NUNCA los propongas): ${ctx.disliked.map(slugOf).join(", ") || "—"}.
-
+- Favoritas: ${ctx.favorites.join(", ") || "—"} (úsalas solo si encajan con lo que pide y con su objetivo; no son obligatorias).
+${ctx.family.length ? `- Su familia también come estos platos (la app ajusta la porción de cada uno): ${ctx.family.map((f) => `${f.name}${f.kcal ? ` ~${f.kcal} kcal/día` : ""}`).join(", ")}.\n` : ""}
 # El plan
 - Días: ${ctx.dates.join(", ")}. Franjas de cada día (en orden): ${ctx.slots.join(", ")}.
-- Ocupadas en el calendario (NO las toques): ${ctx.busy.map((b) => `${b.key.replace("|", " ")} (${b.name})`).join(", ") || "ninguna"}.
+- Franjas que ya tienen comida en el calendario: ver "Calendario". No van en "plan": para cambiarlas usa "calendar".
 - Borrador actual: ${planLines.join("; ") || "vacío"}${free > 0 ? ` (${free} franjas libres)` : ""}.
 - La app reparte las kcal del día por franja (el almuerzo es la principal) y ajusta la porción de cada persona sola: elige platos por tipo y perfil de macros, no calcules gramos ni porciones.
 
 # Cómo armar un buen plan
 - Proteína repartida en el día (en almuerzo y cena siempre una fuente clara; en el desayuno idealmente también).
-- Variedad: no repitas plato en el mismo día; en la semana no repitas almuerzos ni cenas salvo que lo pida (desayunos sí pueden repetirse). Alterna pollo, pescado, carnes rojas (máx. 2–3 veces por semana), huevos y menestras.
+- Repetir o variar: NO asumas que quiere variedad. Mucha gente repite sus platos cada semana a propósito: si su historial muestra que repite, o lo pide, repite sin problema. Varía solo si lo pide o no hay señal clara; si dudas, pregúntale. No pongas el mismo plato dos veces el mismo día salvo que lo pida. Carnes rojas máx. 2–3 veces por semana.
 - Equilibrio: si un almuerzo es pesado (frituras, mucha grasa), que la cena sea ligera. Prefiere platos con verduras, menestras y pescado.
 - Ajusta al objetivo: bajar grasa → platos saciantes, proteína alta y kcal moderadas; músculo → proteína alta en cada comida; energía → carbohidratos de calidad antes/después de entrenar.
 - Si eligió "con lo que tengo" o "lo que vence", prioriza platos con más ingredientes en casa o marcados "vence" y dilo.
@@ -231,11 +263,22 @@ ${ctx.minor ? "- ES MENOR DE EDAD: nunca propongas déficit calórico, dietas pa
 - Pide armar o rehacer el plan → llena en "plan" TODAS las franjas libres de los días del plan.
 - Pide un cambio puntual ("más proteína en la cena", "cambia el martes") → en "plan" solo esas franjas.
 - Pide vaciar franjas → "remove".
+- Pide cambiar, quitar o reemplazar comidas que YA están en el calendario (o ajustar "mi plan" cuando sus comidas ya están en el calendario) → "calendar", una entrada por franja (slug = plato nuevo, null = quitar). La persona confirma antes de que se aplique: en el mensaje di que le dejaste los cambios para confirmar, NUNCA que ya los hiciste. Las comidas marcadas [hecha] no se pueden cambiar.
+- Nunca digas en el mensaje que cambiaste, agregaste o creaste algo que no pusiste en "plan", "calendar", "remove" o "new_recipes".
 - Pide opciones para UNA franja → "alternatives" (3–5) y "plan" vacío.
 - Pregunta de nutrición/salud sin cambiar el plan → responde en "message" y deja "plan" vacío.
 - Usa slugs del catálogo de abajo (o el "ref" de una receta nueva) y respeta su tipo (breakfast/lunch/dinner/snack; lunch y dinner son intercambiables).
 - Si pide un plato que no está en el catálogo, o te pide crear/inventar una receta, CRÉALA en "new_recipes" (ver abajo) y ponla en el plan.
 - "quick_replies": 2–4 siguientes pasos útiles y concretos para ESTE plan (máx. 40 caracteres cada uno), escritos como los diría la persona.
+
+# Calendario (comidas ya agendadas; se cambian con "calendar")
+${ctx.calendar.map((c) => `${c.key.replace("|", " ")}: ${c.meals}${c.locked ? " [hecha]" : ""}`).join("\n") || "vacío"}
+
+# Lo que comieron los últimos días (para respetar sus costumbres)
+${ctx.history.map((h) => `${h.date} ${h.slot}: ${h.name}${h.done ? "" : " (no marcada como hecha)"}`).join("\n") || "sin registro"}
+
+# Despensa (lo que hay en casa)
+${ctx.pantry.map((p) => `${p.name}: ${p.quantity} ${p.unit}${p.expires ? `, vence ${p.expires}` : ""}`).join("\n") || "vacía o sin registrar"}
 
 # Recetas nuevas
 - Prefiere el catálogo; crea una receta nueva solo si te la piden o si el catálogo no tiene nada que encaje con lo que pide (máx. ${MAX_NEW_PER_TURN} por respuesta).
@@ -243,7 +286,7 @@ ${ctx.minor ? "- ES MENOR DE EDAD: nunca propongas déficit calórico, dietas pa
 - Cantidades realistas para las porciones que indicas, en la unidad entre paréntesis (g, ml, unit = unidades). Sal, pimienta y especias pueden ir "al gusto" (quantity y unit null).
 - Pasos claros y cortos (3–8). Nombre atractivo y descriptivo, en español y en inglés.
 - La app calcula sola las kcal y macros de la receta a partir de los ingredientes: no los inventes; elige ingredientes y cantidades que encajen con el objetivo.
-- Ponla en "plan" con slug = su "ref" (o en "alternatives"). En el mensaje menciona que es una receta nueva creada para ella/él.
+- Ponla en "plan" con slug = su "ref" (o en "calendar" si la franja ya está en el calendario, o en "alternatives"). En el mensaje menciona que es una receta nueva creada para ella/él.
 - Las recetas nuevas ya creadas en este borrador están en el catálogo con slug "nueva-…": reúsalas por ese slug, no las vuelvas a crear.
 
 # Límites

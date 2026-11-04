@@ -21,7 +21,7 @@ type Serving = ReturnType<typeof myServing>;
  */
 export function PlanPanel({
   plan, dates, targets, cardMap, busy, slots, mealsPerDay, myKcal, pending, highlight, clip,
-  onSwap, onSet, onClip, onPaste, onBuild, onOpenCustom,
+  onSwap, onSet, onClip, onPaste, onBuild, onOpenCustom, pendingCalendar, onShowPending,
 }: {
   plan: Plan;
   dates: string[];
@@ -42,6 +42,10 @@ export function PlanPanel({
   onBuild: () => void;
   /** Abre una receta nueva del Chef (ingredientes y pasos). */
   onOpenCustom: (recipeId: string) => void;
+  /** Franjas del calendario con un cambio del Chef sin confirmar. */
+  pendingCalendar?: ReadonlySet<string>;
+  /** Lleva a la tarjeta del chat para confirmar el cambio. */
+  onShowPending?: () => void;
 }) {
   const t = useTranslations("chef");
   const ts = useTranslations("slots");
@@ -165,6 +169,14 @@ export function PlanPanel({
                 <div className="flex items-center gap-3 rounded-2xl bg-muted/60 p-3 text-sm text-muted-foreground">
                   <Lock className="size-4 shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{t("busy", { name: busyName })}</span>
+                  {pendingCalendar?.has(key) && (
+                    <button
+                      onClick={onShowPending}
+                      className="shrink-0 rounded-full bg-fuchsia-100 px-2.5 py-1 text-xs font-semibold text-fuchsia-800 active:scale-95 dark:bg-fuchsia-950/60 dark:text-fuchsia-200"
+                    >
+                      ✨ {t("calendar.pendingChip")}
+                    </button>
+                  )}
                 </div>
               ) : card ? (
                 <SlotCard

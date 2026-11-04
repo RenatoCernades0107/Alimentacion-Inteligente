@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarCheck, CloudOff, Menu, Share2, SlidersHorizontal, SquarePen, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { applyCalendarChanges } from "@/app/actions/chef";
 import { deleteChefDraft, duplicateChefDraft, getChefDraft, renameChefDraft, saveChefDraft } from "@/app/actions/chef-drafts";
 import { Composer, Messages, Welcome, type LiveThinking, type Starter } from "@/components/chef/chat-panel";
 import { CustomRecipeDrawer } from "@/components/chef/custom-recipe-drawer";
@@ -21,7 +23,7 @@ import {
 } from "@/lib/chef";
 import { pruneCustom, replaceRecipeIds } from "@/lib/chef-custom";
 import type { ChefEvent } from "@/lib/chef-turn";
-import type { MealSlot } from "@/lib/types";
+import { localName, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export type ChefViewProps = {
@@ -419,9 +421,14 @@ export function ChefView(props: ChefViewProps) {
         if (ch.recipeId) plan[ch.key] = { recipeId: ch.recipeId, reason: ch.reason };
         else delete plan[ch.key];
       }
-      // Recetas nuevas que inventó: viven en el borrador hasta pasarlas al calendario.
-      const custom = pruneCustom({ ...c.data.custom, ...Object.fromEntries(reply.custom.map((d) => [d.card.id, d])) }, plan);
-      const text = reply.message || (reply.changes.length ? t("updatedCount", { count: reply.changes.length }) : "");
+      // Recetas nuevas que inventó: viven en el borrador hasta pasarlas al calendario (también las que
+      // usan cambios al calendario que aún no se confirman).
+      const pendingIds = [...c.data.messages.flatMap((m) => (m.calendar?.status === "pending" ? m.calendar.changes : [])), ...reply.calendar]
+        .flatMap((ch) => (ch.recipeId ? [ch.recipeId] : []));
+      const custom = pruneCustom({ ...c.data.custom, ...Object.fromEntries(reply.custom.map((d) => [d.card.id, d])) }, plan, pendingIds);
+      const text =
+        reply.message ||
+        (reply.changes.length ? t("updatedCount", { count: reply.changes.length }) : reply.calendar.length ? t("calendar.title", { count: reply.calendar.length }) : "");
       const msg: UiMessage = {
         role: "model",
         text,
@@ -429,6 +436,8 @@ export function ChefView(props: ChefViewProps) {
         ...(reply.sources.length ? { sources: reply.sources } : {}),
         ...(reply.changes.length ? { changes: reply.changes.length } : {}),
         ...(thinking && (thinking.steps.length || thinking.text) ? { thinking } : {}),
+        ...(reply.calendar.length ? { calendar: { changes: reply.calendar, status: "pending" as const } } : {}),
+        ...(reply.dropped ? { dropped: reply.dropped } : {}),
       };
       return {
         ...c,
@@ -499,6 +508,59 @@ export function ChefView(props: ChefViewProps) {
   };
 
   const build = (prepare?: (d: DraftData) => DraftData) => send("build", t("buildPrompt"), prepare);
+
+  // ─────────────────────────────────── Cambios al calendario ───────────────────────────────────
+  const router = useRouter();
+  const locale = useLocale();
+  const [applyingCal, setApplyingCal] = useState<number | null>(null);
+
+  /** Las recetas nuevas ya guardadas pasan a usar su id real en el plan y en las propuestas. */
+  const adoptSaved = (d: DraftData, saved: Record<string, string>): DraftData => {
+    if (!Object.keys(saved).length) return d;
+    return {
+      ...d,
+      plan: replaceRecipeIds(d.plan, saved),
+      custom: Object.fromEntries(Object.entries(d.custom).filter(([id]) => !saved[id])),
+      messages: d.messages.map((m) =>
+        m.calendar
+          ? { ...m, calendar: { ...m.calendar, changes: m.calendar.changes.map((c) => (c.recipeId && saved[c.recipeId] ? { ...c, recipeId: saved[c.recipeId] } : c)) } }
+          : m,
+      ),
+    };
+  };
+
+  const setCalendarStatus = (index: number, status: "applied" | "dismissed") =>
+    changeData((d) => ({
+      ...d,
+      messages: d.messages.map((m, i) => (i === index && m.calendar ? { ...m, calendar: { ...m.calendar, status } } : m)),
+    }));
+
+  const applyCalendar = async (index: number) => {
+    const proposal = data.messages[index]?.calendar;
+    if (!proposal || proposal.status !== "pending" || applyingCal !== null) return;
+    setApplyingCal(index);
+    try {
+      const used = proposal.changes.flatMap((c) => (c.recipeId && data.custom[c.recipeId] ? [c.recipeId] : []));
+      const res = await applyCalendarChanges(
+        proposal.changes.map(({ key, recipeId, mealIds }) => ({ key, recipeId, mealIds })),
+        Object.fromEntries(used.map((id) => [id, data.custom[id].recipe])),
+      );
+      changeData((d) => {
+        const next = adoptSaved(d, res.saved);
+        return { ...next, messages: next.messages.map((m, i) => (i === index && m.calendar ? { ...m, calendar: { ...m.calendar, status: "applied" } } : m)) };
+      });
+      router.refresh();
+      if (res.applied) toast.success(t("calendar.done", { count: res.applied }));
+      if (res.skipped) toast(t("calendar.skipped", { count: res.skipped }));
+      if (!res.applied && !res.skipped) toast(t("calendar.nothing"));
+    } catch {
+      toast.error(t("error"));
+    } finally {
+      setApplyingCal(null);
+    }
+  };
+
+  const pendingCalendar = new Set(data.messages.flatMap((m) => (m.calendar?.status === "pending" ? m.calendar.changes.map((c) => c.key) : [])));
 
   // ──────────────────────────────────────── Copiar y pegar ────────────────────────────────────────
   const setClip = (c: MealClip | null) => {
@@ -618,7 +680,20 @@ export function ChefView(props: ChefViewProps) {
           onSettings={() => setSettings(true)}
         />
       ) : tab === "chat" ? (
-        <Messages key={current.key} messages={data.messages} live={live} onShowPlan={() => setTab("plan")} />
+        <Messages
+          key={current.key}
+          messages={data.messages}
+          live={live}
+          onShowPlan={() => setTab("plan")}
+          calendar={{
+            dishName: (id) => (cardMap.get(id) ? localName(cardMap.get(id)!, locale) : null),
+            applying: applyingCal,
+            disabled: pending || applyingCal !== null,
+            isParent,
+            onApply: (i) => void applyCalendar(i),
+            onDismiss: (i) => setCalendarStatus(i, "dismissed"),
+          }}
+        />
       ) : (
         <div className="pt-3">
           <PlanPanel
@@ -641,6 +716,8 @@ export function ChefView(props: ChefViewProps) {
             onPaste={paste}
             onBuild={() => build()}
             onOpenCustom={setOpenCustom}
+            pendingCalendar={pendingCalendar}
+            onShowPending={() => setTab("chat")}
           />
         </div>
       )}
@@ -732,14 +809,8 @@ export function ChefView(props: ChefViewProps) {
         cardMap={cardMap}
         isParent={isParent}
         custom={data.custom}
-        onSaved={(saved) =>
-          // Las recetas nuevas ya son recetas de verdad: el plan usa sus ids y dejan de estar en el borrador.
-          changeData((d) => ({
-            ...d,
-            plan: replaceRecipeIds(d.plan, saved),
-            custom: Object.fromEntries(Object.entries(d.custom).filter(([id]) => !saved[id])),
-          }))
-        }
+        // Las recetas nuevas ya son recetas de verdad: el plan usa sus ids y dejan de estar en el borrador.
+        onSaved={(saved) => changeData((d) => adoptSaved(d, saved))}
       />
 
       <CustomRecipeDrawer dish={openCustom ? (data.custom[openCustom] ?? null) : null} onClose={() => setOpenCustom(null)} />

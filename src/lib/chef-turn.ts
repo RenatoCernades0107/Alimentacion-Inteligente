@@ -4,7 +4,10 @@ import { z } from "zod";
 import type { requireMember } from "@/lib/session";
 import { addDays, isValidDate, todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
-import { loadMyTarget } from "@/lib/my-target";
+import { loadMyBody, toMyTarget } from "@/lib/my-target";
+import { chefProfile } from "@/lib/chef-profile";
+import { loadFamilyTargets } from "@/lib/family-targets";
+import { loadFavoriteIds } from "@/lib/recipes";
 import { loadChefData } from "@/lib/chef-data";
 import { askChef, type ChefStep } from "@/lib/chef-ai";
 import { CustomRecipeSchema } from "@/lib/chef-drafts";
@@ -51,6 +54,11 @@ export type ChefEvent =
 
 type Member = Pick<Awaited<ReturnType<typeof requireMember>>, "supabase" | "family" | "user" | "profile">;
 
+/** Días hacia adelante del calendario que ve el Chef (puede proponer cambios en ellos). */
+const CALENDAR_DAYS = 14;
+/** Máximo de productos de la despensa que se le pasan. */
+const MAX_PANTRY = 80;
+
 /**
  * Un turno del Chef IA: arma el plan ("build") o responde a un mensaje, contando por `emit` lo que va
  * haciendo (pasos y razonamiento del modelo). Si la IA no está disponible o falla, "build" usa el plan
@@ -63,10 +71,17 @@ export async function runChefTurn(session: Member, raw: unknown, locale: "es" | 
   const step = (text: string) => emit({ type: "step", text });
 
   const today = todayIn(family.timezone);
-  const [{ cards, busy, foods, inventory }, target] = await Promise.all([
+  const [{ cards, busy, calendar, history: past, foods, inventory }, body, favoriteIds, familyTargets] = await Promise.all([
     loadChefData(supabase, family.id, today, locale, true),
-    loadMyTarget(supabase, user.id, family.timezone),
+    loadMyBody(supabase, user.id, family.timezone),
+    loadFavoriteIds(supabase, user.id),
+    // Solo nombre y kcal de cada integrante (datos derivados); si falla, el Chef sigue sin ese contexto.
+    loadFamilyTargets({ supabase, userId: user.id, isParent: profile.role === "parent", family }).catch((e) => {
+      console.warn("chef family targets", e);
+      return [];
+    }),
   ]);
+  const target = toMyTarget(body);
   const minor = !!target.minor;
   const goal = goalsFor(minor).includes(input.prefs.goal) ? input.prefs.goal : "healthy";
   const prefs = { ...input.prefs, goal };
@@ -102,14 +117,35 @@ export async function runChefTurn(session: Member, raw: unknown, locale: "es" | 
     step(text);
   };
 
-  const ctx = { cards: cardMap, slots, dates: new Set(dates), busy: new Set<string>(busy.keys()) };
+  // Contexto: calendario de los próximos días, lo que comieron, la despensa, la familia y las favoritas.
+  const calendarUntil = addDays(today, CALENDAR_DAYS);
+  const calendarLines = [...calendar.entries()]
+    .filter(([k]) => parseSlotKey(k).date <= calendarUntil)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([key, meals]) => ({ key, meals: meals.map((m) => m.name).join(", "), locked: meals.every((m) => m.status === "completed") }));
+  const pantry = inventory
+    .filter((i) => i.quantity > 0)
+    .map((i) => ({
+      name: (i.food_id && foodsById.get(i.food_id)?.name_es) || i.product_name || "",
+      quantity: Math.round(i.quantity * 100) / 100,
+      unit: i.unit,
+      expires: i.expires_on,
+    }))
+    .filter((i) => i.name)
+    .sort((a, b) => (a.expires ?? "9999").localeCompare(b.expires ?? "9999"))
+    .slice(0, MAX_PANTRY);
+  const bySlugId = new Map(cards.map((c) => [c.id, c.slug]));
+  const favorites = [...favoriteIds].flatMap((id) => (bySlugId.has(id) ? [bySlugId.get(id)!] : []));
+  const familyCtx = familyTargets.filter((m) => !(m.kind === "profile" && m.id === user.id)).map((m) => ({ name: m.name, kcal: m.kcal }));
+
+  const ctx = { cards: cardMap, slots, dates: new Set(dates), busy: new Set<string>(busy.keys()), calendar };
   try {
     const { raw: rawReply, searched } = await askChef(
       {
         locale, name: profile.full_name?.split(" ")[0] ?? "", today, prefs, targets: dayTargets(target.kcal, goal), minor,
-        weightKg: target.weightKg ?? null, goalKg: target.goalKg ?? null, mealsPerDay: family.meals_per_day, slots, dates,
+        profile: chefProfile(body.body, body.logs, body.target), mealsPerDay: family.meals_per_day, slots, dates,
         cards, plan, busy: inScopeBusy.map(([key, name]) => ({ key, name })), liked: input.liked, disliked: input.disliked,
-        foods, custom,
+        foods, custom, calendar: calendarLines, history: past, pantry, family: familyCtx, favorites,
       },
       history,
       { onStep, onReasoning: (text) => emit({ type: "thinking", text }) },
@@ -129,7 +165,8 @@ export async function runChefTurn(session: Member, raw: unknown, locale: "es" | 
 
     const reply = sanitizeReply(rawReply, { ...ctx, newDishes }, searched);
     for (const d of reply.custom) step(t("steps.recipe", { name: locale === "en" ? d.recipe.name_en : d.recipe.name_es }));
-    if (reply.message || reply.changes.length || reply.alternatives) return reply;
+    if (reply.dropped) console.warn("chef dropped changes:", reply.dropped);
+    if (reply.message || reply.changes.length || reply.calendar.length || reply.alternatives) return reply;
     console.error("chef empty reply:", JSON.stringify(rawReply).slice(0, 800));
     throw new Error("empty chef reply");
   } catch (e) {
@@ -138,12 +175,12 @@ export async function runChefTurn(session: Member, raw: unknown, locale: "es" | 
     // igual se arma un plan base; si no, se avisa que el Chef no está disponible.
     const scopedEmpty = !Object.keys(plan).some((k) => dates.includes(parseSlotKey(k).date));
     const wantsPlan = input.intent === "build" || (scopedEmpty && PLAN_REQUEST.test(history[history.length - 1].text));
-    if (!wantsPlan) return { message: t("offlineMessage"), sources: [], quickReplies: [], changes: [], alternatives: null, custom: [], offline: true };
+    if (!wantsPlan) return { message: t("offlineMessage"), sources: [], quickReplies: [], changes: [], alternatives: null, custom: [], calendar: [], dropped: 0, offline: true };
     const next = fallbackPlan({
       cards, dates, slots, goal, prefs: prefs.prefs, liked: input.liked, disliked: input.disliked,
       busy: inScopeBusy.map(([k]) => k), plan,
     });
     const changes = (Object.keys(next) as SlotKey[]).filter((k) => next[k]?.recipeId !== plan[k]?.recipeId).map((key) => ({ key, recipeId: next[key]!.recipeId }));
-    return { message: t("offlineBuilt"), sources: [], quickReplies: [], changes, alternatives: null, custom: [], offline: true };
+    return { message: t("offlineBuilt"), sources: [], quickReplies: [], changes, alternatives: null, custom: [], calendar: [], dropped: 0, offline: true };
   }
 }

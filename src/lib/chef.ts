@@ -84,6 +84,18 @@ export type CustomDish = { card: DishCard; recipe: CustomRecipe };
 /** Máximo de recetas nuevas guardadas en un borrador. */
 export const MAX_CUSTOM = 24;
 
+/** Una comida que ya está en el calendario (lo que el Chef puede proponer cambiar). */
+export type CalendarMeal = { id: string; name: string; status: "proposed" | "planned" | "completed" | "cancelled"; seriesId: string | null; recipeId: string | null };
+
+/**
+ * Cambio propuesto a una franja que ya tiene comida en el calendario: quitar lo que hay (las comidas
+ * `mealIds`, que no estén completadas) y, si `recipeId`, poner ese plato. Se aplica solo al confirmar.
+ */
+export type CalendarChange = { key: SlotKey; recipeId: string | null; reason?: string; before: string; mealIds: string[] };
+
+/** Cambios al calendario de un mensaje del Chef y si ya se aplicaron. */
+export type CalendarProposal = { changes: CalendarChange[]; status: "pending" | "applied" | "dismissed" };
+
 /** Lo que pensó el Chef antes de responder (para mostrarlo plegado bajo su mensaje). */
 export type Thinking = { steps: string[]; text: string; ms: number };
 
@@ -115,6 +127,10 @@ export type UiMessage = {
   changes?: number;
   /** Pasos y razonamiento del Chef en esta respuesta. */
   thinking?: Thinking;
+  /** Cambios que propuso a comidas que ya están en el calendario (se confirman). */
+  calendar?: CalendarProposal;
+  /** Cambios que pidió la IA y no se pudieron aplicar (franja o plato inválido). */
+  dropped?: number;
 };
 
 /** Contenido de un borrador del Chef (lo que se guarda en `chef_drafts.data`). */
@@ -145,8 +161,12 @@ export type ChefReply = {
   changes: { key: SlotKey; recipeId: string | null; reason?: string }[];
   /** Alternativas para una franja, para elegir deslizando. */
   alternatives: { key: SlotKey; options: { recipeId: string; reason?: string }[] } | null;
-  /** Recetas nuevas que inventó en este turno (las que usa en el plan o en las alternativas). */
+  /** Recetas nuevas que inventó en este turno (las que usa en el plan, el calendario o las alternativas). */
   custom: CustomDish[];
+  /** Cambios propuestos a comidas que ya están en el calendario (se aplican al confirmar). */
+  calendar: CalendarChange[];
+  /** Cambios que pidió la IA y se descartaron por no ser válidos. */
+  dropped: number;
   /** true si respondió el plan de respaldo (sin IA). */
   offline?: boolean;
 };
@@ -418,6 +438,8 @@ export type RawReply = {
   plan?: { date: string; slot: string; slug: string; reason?: string | null }[];
   remove?: { date: string; slot: string }[];
   alternatives?: { date: string; slot: string; options: { slug: string; reason?: string | null }[] } | null;
+  /** Cambios a comidas que ya están en el calendario (slug null o vacío = quitar). */
+  calendar?: { date: string; slot: string; slug?: string | null; reason?: string | null }[] | null;
   /** Recetas que inventa la IA (se validan y se arman en src/lib/chef-custom.ts). */
   new_recipes?: RawNewRecipe[] | null;
 };
@@ -448,6 +470,8 @@ export function sanitizeReply(
     slots: MealSlot[];
     dates: ReadonlySet<string>;
     busy: ReadonlySet<string>;
+    /** Comidas de cada franja ocupada (para proponer cambios al calendario). Sin esto, no se proponen. */
+    calendar?: ReadonlyMap<string, CalendarMeal[]>;
     /** Recetas que la IA inventó en este turno (ya validadas), con la referencia que les puso. */
     newDishes?: { ref: string; dish: CustomDish }[];
   },
@@ -465,29 +489,74 @@ export function sanitizeReply(
     for (const k of [dish.card.name_en, dish.card.name_es, dish.card.slug, ref]) if (k) lookup.set(norm(k), dish.card);
   }
   const bySlug = { get: (slug: string | null | undefined) => (typeof slug === "string" ? lookup.get(norm(slug)) : undefined) };
-  const validKey = (date: string, rawSlot: string): SlotKey | null => {
+  /**
+   * Clave de una franja (o null si no es válida): una del plan, o una que ya tiene comida en el
+   * calendario aunque esté fuera de los días del plan (se pueden cambiar las próximas semanas).
+   */
+  const anyKey = (date: string, rawSlot: string): SlotKey | null => {
     const slot = SLOT_ALIASES[norm(rawSlot ?? "")] ?? norm(rawSlot ?? "");
     date = (date ?? "").trim().slice(0, 10);
-    if (!ctx.dates.has(date) || !ctx.slots.includes(slot as MealSlot)) return null;
+    if (!ctx.slots.includes(slot as MealSlot)) return null;
     const key = slotKey(date, slot as MealSlot);
-    return ctx.busy.has(key) ? null : key;
+    return ctx.dates.has(date) || ctx.calendar?.has(key) ? key : null;
   };
+  /** Franja libre del plan (las ocupadas en el calendario van por `calendar`). */
+  const validKey = (date: string, rawSlot: string): SlotKey | null => {
+    const key = anyKey(date, rawSlot);
+    return key && ctx.dates.has(parseSlotKey(key).date) && !ctx.busy.has(key) ? key : null;
+  };
+  /** Comidas que se pueden cambiar en una franja ocupada (las completadas no se tocan). */
+  const editable = (key: SlotKey) => (ctx.calendar?.get(key) ?? []).filter((m) => m.status !== "completed" && m.status !== "cancelled");
   const clip = (s: string | null | undefined, n: number) => (s ?? "").trim().slice(0, n) || undefined;
 
   const changes: ChefReply["changes"] = [];
+  const calendar: CalendarChange[] = [];
   const touched = new Set<string>();
+  let dropped = 0;
+  /** Cambio a una franja que ya tiene comida: se propone para confirmar (si hay algo que se pueda cambiar). */
+  const toCalendar = (key: SlotKey, recipeId: string | null, reason?: string) => {
+    const meals = editable(key);
+    // Nada que cambiar, o ya está ese mismo plato: no es un cambio.
+    if (!meals.length || (recipeId && meals.length === 1 && meals[0].recipeId === recipeId)) return false;
+    calendar.push({ key, recipeId, reason, before: meals.map((m) => m.name).join(", "), mealIds: meals.map((m) => m.id) });
+    return true;
+  };
+
   for (const p of raw.plan ?? []) {
-    const key = validKey(p.date, p.slot);
+    const key = anyKey(p.date, p.slot);
     const card = bySlug.get(p.slug);
-    if (!key || !card || touched.has(key)) continue;
+    if (!key || !card) {
+      dropped++;
+      continue;
+    }
+    if (touched.has(key)) continue;
     touched.add(key);
-    changes.push({ key, recipeId: card.id, reason: clip(p.reason, 160) });
+    if (!ctx.busy.has(key)) changes.push({ key, recipeId: card.id, reason: clip(p.reason, 160) });
+    // La IA a veces pone en "plan" franjas que ya están en el calendario: se proponen como cambio.
+    else if (!toCalendar(key, card.id, clip(p.reason, 160))) dropped++;
+  }
+  for (const r of raw.calendar ?? []) {
+    const key = anyKey(r.date, r.slot);
+    const wantsDish = typeof r.slug === "string" && r.slug.trim() !== "";
+    const card = wantsDish ? bySlug.get(r.slug) : undefined;
+    if (!key || (wantsDish && !card)) {
+      dropped++;
+      continue;
+    }
+    if (touched.has(key)) continue;
+    touched.add(key);
+    if (!ctx.busy.has(key)) {
+      // Franja libre: es un cambio normal del plan.
+      if (card) changes.push({ key, recipeId: card.id, reason: clip(r.reason, 160) });
+    } else if (!toCalendar(key, card?.id ?? null, clip(r.reason, 160))) dropped++;
   }
   for (const r of raw.remove ?? []) {
-    const key = validKey(r.date, r.slot);
-    if (!key || touched.has(key)) continue;
+    const key = anyKey(r.date, r.slot);
+    if (!key) continue;
+    if (touched.has(key)) continue;
     touched.add(key);
-    changes.push({ key, recipeId: null });
+    if (!ctx.busy.has(key)) changes.push({ key, recipeId: null });
+    else toCalendar(key, null);
   }
 
   let alternatives: ChefReply["alternatives"] = null;
@@ -507,8 +576,12 @@ export function sanitizeReply(
   const cited = [...new Set(raw.sources ?? [])].map((u) => found.get(u)).filter((r): r is Source => !!r);
   const sources = (cited.length ? cited : searched).slice(0, 4);
 
-  // Solo se devuelven las recetas nuevas que quedaron en el plan o en las alternativas.
-  const used = new Set([...changes.map((c) => c.recipeId), ...(alternatives?.options ?? []).map((o) => o.recipeId)]);
+  // Solo se devuelven las recetas nuevas que quedaron en el plan, el calendario o las alternativas.
+  const used = new Set([
+    ...changes.map((c) => c.recipeId),
+    ...calendar.map((c) => c.recipeId),
+    ...(alternatives?.options ?? []).map((o) => o.recipeId),
+  ]);
   const custom = [...fresh.values()].filter((d) => used.has(d.card.id));
 
   return {
@@ -519,6 +592,8 @@ export function sanitizeReply(
     changes,
     alternatives,
     custom,
+    calendar,
+    dropped,
   };
 }
 
@@ -614,4 +689,31 @@ export function planToText(
 export function migrateDraft(raw: unknown): unknown {
   if (raw && typeof raw === "object" && (raw as { v?: unknown }).v === 2) return { ...raw, v: 3, custom: {} };
   return raw;
+}
+
+/**
+ * Qué hacer en el calendario al confirmar los cambios del Chef. Por franja: las comidas sueltas se
+ * borran, las de una comida que se repite se cancelan solo ese día (la serie sigue) y, si hay plato
+ * nuevo, se agrega. Si las comidas de la franja ya no son las mismas que cuando se propuso (alguien
+ * cambió el calendario), esa franja se salta. Las completadas nunca se tocan.
+ */
+export function calendarOps(changes: CalendarChange[], now: ReadonlyMap<string, CalendarMeal[]>) {
+  const remove: string[] = [];
+  const cancel: string[] = [];
+  const insert: { key: SlotKey; recipeId: string }[] = [];
+  const skipped: SlotKey[] = [];
+  const seen = new Set<string>();
+  for (const c of changes) {
+    if (seen.has(c.key)) continue;
+    seen.add(c.key);
+    const meals = (now.get(c.key) ?? []).filter((m) => m.status !== "completed" && m.status !== "cancelled");
+    const same = meals.length === c.mealIds.length && meals.every((m) => c.mealIds.includes(m.id));
+    if (!same || (!meals.length && !c.recipeId)) {
+      skipped.push(c.key);
+      continue;
+    }
+    for (const m of meals) (m.seriesId ? cancel : remove).push(m.id);
+    if (c.recipeId) insert.push({ key: c.key, recipeId: c.recipeId });
+  }
+  return { remove, cancel, insert, skipped };
 }

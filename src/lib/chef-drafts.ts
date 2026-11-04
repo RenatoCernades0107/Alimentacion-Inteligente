@@ -77,6 +77,23 @@ export const DraftDataSchema = z.object({
         sources: z.array(SourceSchema).max(6).optional(),
         changes: z.number().int().min(0).max(100).optional(),
         thinking: ThinkingSchema.optional(),
+        calendar: z
+          .object({
+            changes: z
+              .array(
+                z.object({
+                  key: Key,
+                  recipeId: Uuid.nullable(),
+                  reason: z.string().max(200).optional(),
+                  before: z.string().max(400),
+                  mealIds: z.array(Uuid).max(10),
+                }),
+              )
+              .max(70),
+            status: z.enum(["pending", "applied", "dismissed"]),
+          })
+          .optional(),
+        dropped: z.number().int().min(0).max(100).optional(),
       }),
     )
     .max(120),

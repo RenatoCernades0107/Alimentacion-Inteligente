@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { dailyTarget } from "@/lib/body";
+import { dailyTarget, type LogPoint } from "@/lib/body";
 import { toBodyData, toLogPoints, type LogRow } from "@/lib/body-data";
 import { addDays, todayIn } from "@/lib/dates";
 import type { BodyRow } from "@/lib/types";
@@ -23,18 +23,15 @@ export type MyTarget = {
   minor?: boolean;
 };
 
-/**
- * Meta diaria de kcal del propio usuario. Lee solo sus datos con el cliente con RLS (nunca el admin),
- * así que sirve para pantallas que muestran únicamente lo suyo (calendario, inicio).
- */
-export async function loadMyTarget(supabase: SupabaseClient, userId: string, timeZone: string): Promise<MyTarget> {
+/** Datos corporales del propio usuario: ficha, pesajes recientes y su objetivo diario calculado. */
+export async function loadMyBody(supabase: SupabaseClient, userId: string, timeZone: string) {
   const today = todayIn(timeZone);
   const [{ data: body }, { data: access }] = await Promise.all([
     supabase.from("body_profiles").select("*").eq("profile_id", userId).maybeSingle(),
     supabase.rpc("body_access", { p_profile: userId, p_dependent: null }),
   ]);
   const canEdit = access === "edit";
-  if (!body) return { kcal: null, state: "incomplete", canEdit };
+  if (!body) return { today, canEdit, body: null, logs: [] as LogPoint[], target: null };
 
   const columns = "logged_on, weight_kg, height_cm";
   const { data: recent } = await supabase
@@ -55,7 +52,22 @@ export async function loadMyTarget(supabase: SupabaseClient, userId: string, tim
     logs = (last ?? []) as LogRow[];
   }
 
-  const target = dailyTarget(toBodyData(body as BodyRow), toLogPoints(logs), today);
+  const data = toBodyData(body as BodyRow);
+  const points = toLogPoints(logs);
+  return { today, canEdit, body: data, logs: points, target: dailyTarget(data, points, today) };
+}
+
+/**
+ * Meta diaria de kcal del propio usuario. Lee solo sus datos con el cliente con RLS (nunca el admin),
+ * así que sirve para pantallas que muestran únicamente lo suyo (calendario, inicio).
+ */
+export async function loadMyTarget(supabase: SupabaseClient, userId: string, timeZone: string): Promise<MyTarget> {
+  return toMyTarget(await loadMyBody(supabase, userId, timeZone));
+}
+
+/** Resumen de `loadMyBody` para las pantallas (kcal, estado, meta). */
+export function toMyTarget({ canEdit, target }: Awaited<ReturnType<typeof loadMyBody>>): MyTarget {
+  if (!target) return { kcal: null, state: "incomplete", canEdit };
   return {
     kcal: target.kcal,
     state: target.status,
