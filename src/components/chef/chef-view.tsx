@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { CalendarCheck, CloudOff, Menu, Share2, SlidersHorizontal, SquarePen, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { chefTurn } from "@/app/actions/chef";
 import { deleteChefDraft, duplicateChefDraft, getChefDraft, renameChefDraft, saveChefDraft } from "@/app/actions/chef-drafts";
-import { Composer, Messages, Welcome, type Starter } from "@/components/chef/chat-panel";
+import { Composer, Messages, Welcome, type LiveThinking, type Starter } from "@/components/chef/chat-panel";
+import { CustomRecipeDrawer } from "@/components/chef/custom-recipe-drawer";
 import { DraftSidebar } from "@/components/chef/draft-sidebar";
 import { PlanPanel } from "@/components/chef/plan-panel";
 import { AlternativesDrawer, ApplyDrawer } from "@/components/chef/plan-drawers";
@@ -16,9 +16,11 @@ import { PrefsPanel } from "@/components/chef/prefs-panel";
 import { ShareDrawer } from "@/components/chef/share-drawer";
 import { TasteStep } from "@/components/chef/taste-step";
 import {
-  dayTargets, fallbackAlternatives, pasteClip, rebaseDraft, scopeDates, slotKey, tasteDeck,
-  type ChefPrefs, type ChefReply, type DishCard, type DraftData, type DraftMeta, type MealClip, type Plan, type SlotKey, type UiMessage,
+  dayTargets, fallbackAlternatives, migrateDraft, pasteClip, rebaseDraft, scopeDates, slotKey, tasteDeck,
+  type ChefPrefs, type ChefReply, type DishCard, type DraftData, type DraftMeta, type MealClip, type Plan, type SlotKey, type Thinking, type UiMessage,
 } from "@/lib/chef";
+import { pruneCustom, replaceRecipeIds } from "@/lib/chef-custom";
+import type { ChefEvent } from "@/lib/chef-turn";
 import type { MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -93,8 +95,12 @@ function readClip(userId: string): MealClip | null {
 function readMirror(userId: string): (Current & { pending: boolean }) | null {
   try {
     const m = JSON.parse(store("get", MIRROR_KEY(userId)) ?? "null") as (Current & { pending: boolean }) | null;
-    if (!m || typeof m.key !== "string" || m.data?.v !== 2 || !m.data.prefs || !Array.isArray(m.data.messages) || typeof m.data.plan !== "object") return null;
-    return { key: m.key, id: typeof m.id === "string" ? m.id : null, title: typeof m.title === "string" ? m.title : "", data: m.data, pending: !!m.pending };
+    const data = m && (migrateDraft(m.data) as DraftData | undefined);
+    if (!m || !data || typeof m.key !== "string" || data.v !== 3 || !data.prefs || !Array.isArray(data.messages) || typeof data.plan !== "object") return null;
+    return {
+      key: m.key, id: typeof m.id === "string" ? m.id : null, title: typeof m.title === "string" ? m.title : "",
+      data: { ...data, custom: data.custom && typeof data.custom === "object" ? data.custom : {} }, pending: !!m.pending,
+    };
   } catch {
     return null;
   }
@@ -108,13 +114,14 @@ function readOldDraft(userId: string): DraftData | null {
     const d = JSON.parse(raw) as Partial<Omit<DraftData, "v">> & { v?: number };
     if (d?.v !== 1 || !d.prefs) return null;
     return {
-      v: 2,
+      v: 3,
       prefs: d.prefs,
       liked: d.liked ?? [],
       disliked: d.disliked ?? [],
       plan: d.plan ?? {},
       messages: (d.messages ?? []).map((m) => ({ role: m.role, text: String(m.text ?? "").slice(0, 4000), ...(m.offline ? { offline: true } : {}) })),
       quickReplies: d.quickReplies ?? [],
+      custom: {},
     };
   } catch {
     return null;
@@ -131,7 +138,7 @@ export function ChefView(props: ChefViewProps) {
   const t = useTranslations("chef");
 
   const freshData = (first: string, expiring = false): DraftData => ({
-    v: 2,
+    v: 3,
     prefs: {
       goal: initialGoal,
       scope: expiring ? "today" : first === today ? "week" : "today",
@@ -143,6 +150,7 @@ export function ChefView(props: ChefViewProps) {
     plan: {},
     messages: [],
     quickReplies: [],
+    custom: {},
   });
 
   const [drafts, setDrafts] = useState<DraftMeta[]>(props.drafts);
@@ -159,7 +167,11 @@ export function ChefView(props: ChefViewProps) {
   const [clip, setClipState] = useState<MealClip | null>(null);
   const [saveError, setSaveError] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [live, setLive] = useState<LiveThinking | null>(null);
+  const pending = !!live;
+  const [openCustom, setOpenCustom] = useState<string | null>(null);
+  const turnAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => turnAbort.current?.abort(), []);
   const highlightTimer = useRef<number | null>(null);
 
   // ─────────────────────────────── Guardado automático en la base ───────────────────────────────
@@ -372,7 +384,10 @@ export function ChefView(props: ChefViewProps) {
 
   // ───────────────────────────────────────── Datos del plan ─────────────────────────────────────────
   const data = current.data;
-  const cardMap = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
+  const cardMap = useMemo(
+    () => new Map([...cards, ...Object.values(data.custom).map((d) => d.card)].map((c) => [c.id, c])),
+    [cards, data.custom],
+  );
   const busyMap = useMemo(() => new Map<string, string>(props.busy), [props.busy]);
   const targets = dayTargets(myKcal, data.prefs.goal);
   const dates = scopeDates(data.prefs.scope, today, data.prefs.start);
@@ -396,7 +411,7 @@ export function ChefView(props: ChefViewProps) {
 
   // ─────────────────────────────────────────── El Chef ───────────────────────────────────────────
   /** Aplica la respuesta del Chef al borrador en que se pidió: cambios al plan, mensaje y alternativas. */
-  const receive = (key: string, reply: ChefReply) => {
+  const receive = (key: string, reply: ChefReply, thinking?: Thinking) => {
     change((c) => {
       if (c.key !== key) return c;
       const plan: Plan = { ...c.data.plan };
@@ -404,6 +419,8 @@ export function ChefView(props: ChefViewProps) {
         if (ch.recipeId) plan[ch.key] = { recipeId: ch.recipeId, reason: ch.reason };
         else delete plan[ch.key];
       }
+      // Recetas nuevas que inventó: viven en el borrador hasta pasarlas al calendario.
+      const custom = pruneCustom({ ...c.data.custom, ...Object.fromEntries(reply.custom.map((d) => [d.card.id, d])) }, plan);
       const text = reply.message || (reply.changes.length ? t("updatedCount", { count: reply.changes.length }) : "");
       const msg: UiMessage = {
         role: "model",
@@ -411,11 +428,12 @@ export function ChefView(props: ChefViewProps) {
         ...(reply.offline ? { offline: true } : {}),
         ...(reply.sources.length ? { sources: reply.sources } : {}),
         ...(reply.changes.length ? { changes: reply.changes.length } : {}),
+        ...(thinking && (thinking.steps.length || thinking.text) ? { thinking } : {}),
       };
       return {
         ...c,
         title: c.title || reply.title || "",
-        data: { ...c.data, plan, messages: text ? [...c.data.messages, msg] : c.data.messages, quickReplies: reply.quickReplies },
+        data: { ...c.data, plan, custom, messages: text ? [...c.data.messages, msg] : c.data.messages, quickReplies: reply.quickReplies },
       };
     });
     flash(reply.changes.map((c) => c.key));
@@ -432,22 +450,52 @@ export function ChefView(props: ChefViewProps) {
     change((c) => ({ ...c, data: { ...base, messages: [...base.messages, userMsg], quickReplies: [] } }));
     setTasting(false);
     setTab(intent === "build" ? "plan" : "chat");
-    startTransition(async () => {
+    const startedAt = Date.now();
+    const steps: string[] = [];
+    let thought = "";
+    setLive({ steps: [], text: "", startedAt });
+    const ctrl = new AbortController();
+    turnAbort.current = ctrl;
+    void (async () => {
       try {
-        const reply = await chefTurn({
-          intent,
-          prefs: base.prefs,
-          history: history.map(({ role, text }) => ({ role, text })),
-          plan: base.plan as Record<string, { recipeId: string; reason?: string }>,
-          liked: base.liked,
-          disliked: base.disliked,
+        const res = await fetch("/api/chef", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: ctrl.signal,
+          body: JSON.stringify({
+            intent,
+            prefs: base.prefs,
+            history: history.map(({ role, text }) => ({ role, text })),
+            plan: base.plan,
+            liked: base.liked,
+            disliked: base.disliked,
+            custom: Object.fromEntries(Object.entries(base.custom).map(([id, d]) => [id, d.recipe])),
+          }),
         });
-        receive(key, reply);
-      } catch {
+        if (!res.ok || !res.body) throw new Error(`chef ${res.status}`);
+        let reply: ChefReply | null = null;
+        for await (const ev of readEvents(res.body)) {
+          if (ev.type === "step") {
+            steps.push(ev.text);
+            setLive((l) => l && { ...l, steps: [...steps] });
+          } else if (ev.type === "thinking") {
+            thought += ev.text;
+            setLive((l) => l && { ...l, text: thought });
+          } else if (ev.type === "reply") reply = ev.reply;
+          else throw new Error("chef error");
+        }
+        if (!reply) throw new Error("chef: no reply");
+        receive(key, reply, { steps: steps.slice(-20), text: clipThought(thought), ms: Date.now() - startedAt });
+      } catch (e) {
+        if (ctrl.signal.aborted) return;
+        console.error(e);
         toast.error(t("error"));
         change((c) => (c.key === key ? { ...c, data: { ...c.data, messages: [...c.data.messages, { role: "model", text: t("error"), offline: true }] } } : c));
+      } finally {
+        if (turnAbort.current === ctrl) turnAbort.current = null;
+        setLive(null);
       }
-    });
+    })();
   };
 
   const build = (prepare?: (d: DraftData) => DraftData) => send("build", t("buildPrompt"), prepare);
@@ -570,7 +618,7 @@ export function ChefView(props: ChefViewProps) {
           onSettings={() => setSettings(true)}
         />
       ) : tab === "chat" ? (
-        <Messages key={current.key} messages={data.messages} pending={pending} onShowPlan={() => setTab("plan")} />
+        <Messages key={current.key} messages={data.messages} live={live} onShowPlan={() => setTab("plan")} />
       ) : (
         <div className="pt-3">
           <PlanPanel
@@ -592,6 +640,7 @@ export function ChefView(props: ChefViewProps) {
             onClip={setClip}
             onPaste={paste}
             onBuild={() => build()}
+            onOpenCustom={setOpenCustom}
           />
         </div>
       )}
@@ -673,7 +722,50 @@ export function ChefView(props: ChefViewProps) {
 
       <ShareDrawer open={shareOpen} onOpenChange={setShareOpen} ensureSaved={ensureSaved} />
 
-      <ApplyDrawer open={applyOpen} onOpenChange={setApplyOpen} entries={entries} dates={dates} cardMap={cardMap} isParent={isParent} />
+      <ApplyDrawer
+        open={applyOpen}
+        onOpenChange={setApplyOpen}
+        entries={entries}
+        dates={dates}
+        cardMap={cardMap}
+        isParent={isParent}
+        custom={data.custom}
+        onSaved={(saved) =>
+          // Las recetas nuevas ya son recetas de verdad: el plan usa sus ids y dejan de estar en el borrador.
+          changeData((d) => ({
+            ...d,
+            plan: replaceRecipeIds(d.plan, saved),
+            custom: Object.fromEntries(Object.entries(d.custom).filter(([id]) => !saved[id])),
+          }))
+        }
+      />
+
+      <CustomRecipeDrawer dish={openCustom ? (data.custom[openCustom] ?? null) : null} onClose={() => setOpenCustom(null)} />
     </div>
   );
+}
+
+/** Razonamiento que se guarda con el mensaje (el principio, que es donde se ve el plan del modelo). */
+function clipThought(text: string) {
+  const t = text.trim();
+  return t.length > 3000 ? `${t.slice(0, 3000).trimEnd()}…` : t;
+}
+
+/** Lee el NDJSON de /api/chef evento por evento. */
+async function* readEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<ChefEvent> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    buf += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (line) yield JSON.parse(line) as ChefEvent;
+    }
+    if (done) break;
+  }
+  if (buf.trim()) yield JSON.parse(buf) as ChefEvent;
 }

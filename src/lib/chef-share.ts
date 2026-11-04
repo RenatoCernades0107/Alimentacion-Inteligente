@@ -34,6 +34,7 @@ const DishSchema = z.object({
   protein: z.number().nullable(),
   carbs: z.number().nullable(),
   fat: z.number().nullable(),
+  custom: z.boolean().optional(),
 });
 
 /** Lee un plan compartido por su token (null si no existe o el token no es válido). Funciona sin sesión. */
@@ -66,5 +67,6 @@ export function shareDish(c: DishCard) {
   return {
     id: c.id, slug: c.slug, name_es: c.name_es, name_en: c.name_en, emoji: c.emoji, image_url: c.image_url, country: c.country,
     meal_types: c.meal_types, time: c.time, kcal: c.kcal, protein: c.protein, carbs: c.carbs, fat: c.fat,
+    ...(c.custom ? { custom: true } : {}),
   };
 }

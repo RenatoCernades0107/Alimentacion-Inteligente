@@ -92,7 +92,7 @@ export function SharedPlanView({ shared, signedIn }: { shared: SharedPlan; signe
 
       {tab === "chat" ? (
         data.messages.length ? (
-          <Messages messages={data.messages} pending={false} onShowPlan={() => setTab("plan")} />
+          <Messages messages={data.messages} live={null} onShowPlan={() => setTab("plan")} />
         ) : (
           <p className="py-10 text-center text-sm text-muted-foreground">{t("noChat")}</p>
         )

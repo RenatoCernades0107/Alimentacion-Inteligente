@@ -11,7 +11,7 @@ import { addDays, daysBetween } from "./dates";
 import { mealTypeForSlot } from "./meals";
 import { kcalPerServing, macrosPerServing, portionFor, slotShare, type NutritionItem } from "./nutrition";
 import type { Suggestion } from "./suggestions";
-import type { Country, MealSlot } from "./types";
+import type { Country, MealSlot, Unit } from "./types";
 
 // ───────────────────────────────────────────── Tipos ─────────────────────────────────────────────
 
@@ -48,7 +48,44 @@ export type DishCard = {
   expiring: boolean;
   /** Lleva carne, aves o mariscos. */
   meat: boolean;
+  /** Receta nueva inventada por el Chef (vive en el borrador hasta pasarla al calendario). */
+  custom?: boolean;
 };
+
+/** Ingrediente de una receta inventada por el Chef (siempre un alimento existente). */
+export type CustomIngredient = {
+  foodId: string;
+  name_es: string;
+  name_en: string;
+  emoji: string | null;
+  /** null = "al gusto". */
+  quantity: number | null;
+  unit: Unit | null;
+  optional: boolean;
+};
+
+/** Receta inventada por el Chef: lo necesario para mostrarla y guardarla en "Recetas". */
+export type CustomRecipe = {
+  name_es: string;
+  name_en: string;
+  description: string;
+  emoji: string;
+  meal_types: ("breakfast" | "lunch" | "dinner" | "snack")[];
+  servings: number;
+  time_minutes: number | null;
+  country: Country;
+  ingredients: CustomIngredient[];
+  steps: string[];
+};
+
+/** Receta nueva con su tarjeta (kcal, macros y lo que hay en casa calculados por la app, no por la IA). */
+export type CustomDish = { card: DishCard; recipe: CustomRecipe };
+
+/** Máximo de recetas nuevas guardadas en un borrador. */
+export const MAX_CUSTOM = 24;
+
+/** Lo que pensó el Chef antes de responder (para mostrarlo plegado bajo su mensaje). */
+export type Thinking = { steps: string[]; text: string; ms: number };
 
 /** Clave de una franja de un día en el plan: "2026-10-12|lunch". */
 export type SlotKey = `${string}|${MealSlot}`;
@@ -76,17 +113,21 @@ export type UiMessage = {
   sources?: Source[];
   /** Cuántas comidas del plan cambió esta respuesta. */
   changes?: number;
+  /** Pasos y razonamiento del Chef en esta respuesta. */
+  thinking?: Thinking;
 };
 
 /** Contenido de un borrador del Chef (lo que se guarda en `chef_drafts.data`). */
 export type DraftData = {
-  v: 2;
+  v: 3;
   prefs: ChefPrefs;
   liked: string[];
   disliked: string[];
   plan: Plan;
   messages: UiMessage[];
   quickReplies: string[];
+  /** Recetas inventadas por el Chef en este borrador (por id). */
+  custom: Record<string, CustomDish>;
 };
 
 /** Resumen de un borrador para la lista lateral. */
@@ -104,6 +145,8 @@ export type ChefReply = {
   changes: { key: SlotKey; recipeId: string | null; reason?: string }[];
   /** Alternativas para una franja, para elegir deslizando. */
   alternatives: { key: SlotKey; options: { recipeId: string; reason?: string }[] } | null;
+  /** Recetas nuevas que inventó en este turno (las que usa en el plan o en las alternativas). */
+  custom: CustomDish[];
   /** true si respondió el plan de respaldo (sin IA). */
   offline?: boolean;
 };
@@ -375,6 +418,23 @@ export type RawReply = {
   plan?: { date: string; slot: string; slug: string; reason?: string | null }[];
   remove?: { date: string; slot: string }[];
   alternatives?: { date: string; slot: string; options: { slug: string; reason?: string | null }[] } | null;
+  /** Recetas que inventa la IA (se validan y se arman en src/lib/chef-custom.ts). */
+  new_recipes?: RawNewRecipe[] | null;
+};
+
+/** Receta nueva tal como la propone la IA (sin validar). */
+export type RawNewRecipe = {
+  ref?: string | null;
+  name_es?: string | null;
+  name_en?: string | null;
+  description?: string | null;
+  emoji?: string | null;
+  meal_types?: string[] | null;
+  servings?: number | null;
+  time_minutes?: number | null;
+  country?: string | null;
+  ingredients?: { food?: string | null; quantity?: number | null; unit?: string | null; optional?: boolean | null }[] | null;
+  steps?: string[] | null;
 };
 
 /**
@@ -383,7 +443,14 @@ export type RawReply = {
  */
 export function sanitizeReply(
   raw: RawReply,
-  ctx: { cards: ReadonlyMap<string, DishCard>; slots: MealSlot[]; dates: ReadonlySet<string>; busy: ReadonlySet<string> },
+  ctx: {
+    cards: ReadonlyMap<string, DishCard>;
+    slots: MealSlot[];
+    dates: ReadonlySet<string>;
+    busy: ReadonlySet<string>;
+    /** Recetas que la IA inventó en este turno (ya validadas), con la referencia que les puso. */
+    newDishes?: { ref: string; dish: CustomDish }[];
+  },
   /** Resultados de la búsqueda web de este turno (las fuentes se toman solo de aquí). */
   searched: Source[] = [],
 ): ChefReply {
@@ -391,6 +458,12 @@ export function sanitizeReply(
   const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
   const lookup = new Map<string, DishCard>();
   for (const c of ctx.cards.values()) for (const k of [c.name_en, c.name_es, c.slug]) lookup.set(norm(k), c);
+  // Las recetas nuevas de este turno ganan si el nombre coincide con otra (es la que la IA acaba de crear).
+  const fresh = new Map<string, CustomDish>();
+  for (const { ref, dish } of ctx.newDishes ?? []) {
+    fresh.set(dish.card.id, dish);
+    for (const k of [dish.card.name_en, dish.card.name_es, dish.card.slug, ref]) if (k) lookup.set(norm(k), dish.card);
+  }
   const bySlug = { get: (slug: string | null | undefined) => (typeof slug === "string" ? lookup.get(norm(slug)) : undefined) };
   const validKey = (date: string, rawSlot: string): SlotKey | null => {
     const slot = SLOT_ALIASES[norm(rawSlot ?? "")] ?? norm(rawSlot ?? "");
@@ -434,6 +507,10 @@ export function sanitizeReply(
   const cited = [...new Set(raw.sources ?? [])].map((u) => found.get(u)).filter((r): r is Source => !!r);
   const sources = (cited.length ? cited : searched).slice(0, 4);
 
+  // Solo se devuelven las recetas nuevas que quedaron en el plan o en las alternativas.
+  const used = new Set([...changes.map((c) => c.recipeId), ...(alternatives?.options ?? []).map((o) => o.recipeId)]);
+  const custom = [...fresh.values()].filter((d) => used.has(d.card.id));
+
   return {
     message: clip(raw.message, 2400) ?? "",
     title: clip(raw.title, 60),
@@ -441,6 +518,7 @@ export function sanitizeReply(
     quickReplies: (raw.quick_replies ?? []).map((q) => q.trim().slice(0, 60)).filter(Boolean).slice(0, 4),
     changes,
     alternatives,
+    custom,
   };
 }
 
@@ -530,4 +608,10 @@ export function planToText(
     if (lines.length) blocks.push([labels.day(date), ...lines].join("\n"));
   }
   return blocks.join("\n\n");
+}
+
+/** Borradores guardados antes de las recetas nuevas (v2): se leen como v3 sin recetas nuevas. */
+export function migrateDraft(raw: unknown): unknown {
+  if (raw && typeof raw === "object" && (raw as { v?: unknown }).v === 2) return { ...raw, v: 3, custom: {} };
+  return raw;
 }

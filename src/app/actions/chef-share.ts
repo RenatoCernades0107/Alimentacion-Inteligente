@@ -33,13 +33,17 @@ export async function shareChefDraft(draftId: string): Promise<ShareInfo> {
 
   const locale = (await getLocale()) === "en" ? "en" : "es";
   const { cards } = await loadChefData(supabase, family.id, todayIn(family.timezone), locale);
-  const byId = new Map(cards.map((c) => [c.id, c]));
+  // Las recetas nuevas del Chef viajan en el borrador; en el link no van datos del inventario.
+  const byId = new Map([...cards, ...Object.values(draft.custom).map((d) => d.card)].map((c) => [c.id, c]));
+  const custom = Object.fromEntries(
+    Object.entries(draft.custom).map(([cid, d]) => [cid, { ...d, card: { ...d.card, have: 0, total: 0, expiring: false } }]),
+  );
   const dishes = Object.fromEntries(
     [...new Set(Object.values(draft.plan).flatMap((e) => (e ? [e.recipeId] : [])))]
       .filter((rid) => byId.has(rid))
       .map((rid) => [rid, shareDish(byId.get(rid)!)]),
   );
-  const snapshot = { title: (row.title as string) ?? "", data: draft, dishes };
+  const snapshot = { title: (row.title as string) ?? "", data: { ...draft, custom }, dishes };
 
   const { data: existing } = await supabase.from("chef_shares").select("id").eq("draft_id", id).maybeSingle();
   const query = existing

@@ -159,7 +159,7 @@ function CardFace({ item }: { item: DeckItem }) {
   const macros = card.protein != null && item.serving ? item.serving : card;
   return (
     <div className="relative size-full overflow-hidden rounded-[2rem] bg-card shadow-xl ring-1 ring-black/5">
-      <RecipeImage src={card.image_url} emoji={card.emoji} recipeId={card.id} alt={localName(card, locale)} className="size-full rounded-none text-8xl" />
+      <RecipeImage src={card.image_url} emoji={card.emoji} recipeId={card.custom ? undefined : card.id} alt={localName(card, locale)} className="size-full rounded-none text-8xl" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-5 pt-24 pb-5 text-white">
         <div className="mb-2 flex flex-wrap gap-1.5 text-xs font-medium">
           {kcal != null && (
@@ -177,6 +177,7 @@ function CardFace({ item }: { item: DeckItem }) {
               <Home className="size-3" /> {t("haveCount", { have: card.have, total: card.total })}
             </span>
           )}
+          {card.custom && <span className="rounded-full bg-fuchsia-500/90 px-2 py-0.5">✨ {t("custom.badge")}</span>}
           {card.expiring && <span className="rounded-full bg-orange-500/90 px-2 py-0.5">{t("usesExpiring")}</span>}
           {!card.meat && (
             <span className="inline-flex items-center gap-1 rounded-full bg-lime-500/80 px-2 py-0.5">

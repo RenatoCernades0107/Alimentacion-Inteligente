@@ -34,7 +34,120 @@ type JsonRequest = {
    * reintentos automáticos del SDK, que con su plazo por defecto de 10 min pasaban el límite de la función).
    */
   budgetMs?: number;
+  /** Para mostrar en vivo lo que piensa el modelo: con esto las llamadas se hacen en streaming. */
+  hooks?: StreamHooks;
 };
+
+export type StreamHooks = {
+  /** Trozo nuevo del razonamiento del modelo (si el proveedor lo expone). */
+  onReasoning?: (delta: string) => void;
+  /** El modelo empezó a escribir la respuesta final. */
+  onAnswerStart?: () => void;
+};
+
+type Params = Omit<OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming, "stream">;
+
+/**
+ * Una llamada al modelo. Con `hooks` va en streaming (para ir mostrando el razonamiento) y arma la
+ * misma respuesta que sin streaming; si el proveedor no acepta streaming, repite la llamada sin él.
+ */
+async function create(client: OpenAI, params: Params, deadline: number, hooks?: StreamHooks): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+  if (!hooks) return client.chat.completions.create(params, callOptions(deadline));
+  const acc = chunkAccumulator(hooks);
+  try {
+    const stream = await client.chat.completions.create({ ...params, stream: true }, callOptions(deadline));
+    for await (const chunk of stream) acc.push(chunk);
+    return acc.result();
+  } catch (e) {
+    if (!(e instanceof OpenAI.BadRequestError) || acc.started()) throw e;
+    const completion = await client.chat.completions.create(params, callOptions(deadline));
+    const reasoning = reasoningOf(completion.choices[0]?.message);
+    if (reasoning) hooks.onReasoning?.(reasoning);
+    return completion;
+  }
+}
+
+/** Razonamiento que algunos proveedores agregan al mensaje o al delta (no es parte del estándar). */
+function reasoningOf(m: unknown): string {
+  const r = m as { reasoning_content?: unknown; reasoning?: unknown } | undefined;
+  const v = r?.reasoning_content ?? r?.reasoning;
+  return typeof v === "string" ? v : "";
+}
+
+/**
+ * Junta los trozos de una respuesta en streaming en una respuesta normal: el texto, las llamadas a
+ * herramientas (que llegan por partes, por índice) y el razonamiento, que se va pasando a `hooks`. Algunos
+ * modelos escriben el razonamiento dentro del texto entre <think>…</think>: también se separa.
+ */
+export function chunkAccumulator(hooks: StreamHooks = {}) {
+  let raw = "";
+  let thinkSent = 0;
+  let answering = false;
+  let any = false;
+  let finish: OpenAI.Chat.Completions.ChatCompletion.Choice["finish_reason"] = "stop";
+  const calls: { id: string; name: string; args: string }[] = [];
+
+  const content = () => {
+    const t = raw.trimStart();
+    if (t.startsWith("<think>")) {
+      const end = t.indexOf("</think>");
+      const thought = end < 0 ? t.slice(7) : t.slice(7, end);
+      if (thought.length > thinkSent) {
+        hooks.onReasoning?.(thought.slice(thinkSent));
+        thinkSent = thought.length;
+      }
+      return end < 0 ? "" : t.slice(end + 8);
+    }
+    // Puede ser el comienzo de "<think>" que aún no llega completo.
+    return "<think>".startsWith(t) ? "" : raw;
+  };
+
+  return {
+    push(chunk: OpenAI.Chat.Completions.ChatCompletionChunk) {
+      any = true;
+      const choice = chunk.choices?.[0];
+      if (!choice) return;
+      if (choice.finish_reason) finish = choice.finish_reason;
+      const d = choice.delta ?? {};
+      const reasoning = reasoningOf(d);
+      if (reasoning) hooks.onReasoning?.(reasoning);
+      if (d.content) {
+        raw += d.content;
+        if (!answering && content().trim()) {
+          answering = true;
+          hooks.onAnswerStart?.();
+        }
+      }
+      for (const tc of d.tool_calls ?? []) {
+        const slot = (calls[tc.index ?? calls.length] ??= { id: "", name: "", args: "" });
+        if (tc.id) slot.id = tc.id;
+        const name = tc.function?.name;
+        if (name && name !== slot.name) slot.name += name;
+        if (tc.function?.arguments) slot.args += tc.function.arguments;
+      }
+    },
+    started: () => any,
+    result(): OpenAI.Chat.Completions.ChatCompletion {
+      const toolCalls = calls
+        .filter(Boolean)
+        .map((c, i) => ({ id: c.id || `call_${i}`, type: "function" as const, function: { name: c.name, arguments: c.args } }));
+      return {
+        id: "",
+        object: "chat.completion",
+        created: 0,
+        model: "",
+        choices: [
+          {
+            index: 0,
+            finish_reason: finish,
+            logprobs: null,
+            message: { role: "assistant", content: content(), refusal: null, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) },
+          },
+        ],
+      };
+    },
+  };
+}
 
 /** Margen mínimo para que valga la pena otra llamada al modelo. */
 const MIN_CALL_MS = 6_000;
@@ -65,9 +178,11 @@ export async function completeJson(req: JsonRequest, deadline = deadlineOf(req))
   const base = { model: req.model, temperature: req.temperature, ...(req.reasoningEffort ? { reasoning_effort: req.reasoningEffort } : {}) };
   let firstError: unknown = null;
   try {
-    const completion = await client.chat.completions.create(
+    const completion = await create(
+      client,
       { ...base, messages: req.messages, response_format: { type: "json_schema", json_schema: { name: req.name, schema: req.schema, strict: false } } },
-      callOptions(deadline),
+      deadline,
+      req.hooks,
     );
     const parsed = parseJsonReply(completion);
     if (isUsable(parsed)) return parsed;
@@ -78,10 +193,7 @@ export async function completeJson(req: JsonRequest, deadline = deadlineOf(req))
   }
   if (deadline - Date.now() < MIN_CALL_MS) throw firstError;
   console.warn("json_schema reply unusable, retrying with json_object:", firstError instanceof Error ? firstError.message : firstError);
-  const completion = await client.chat.completions.create(
-    { ...base, messages: withSchemaHint(req), response_format: { type: "json_object" } },
-    callOptions(deadline),
-  );
+  const completion = await create(client, { ...base, messages: withSchemaHint(req), response_format: { type: "json_object" } }, deadline, req.hooks);
   return parseJsonReply(completion);
 }
 
@@ -92,7 +204,8 @@ export class JsonReplyError extends Error {}
  * saltos de línea o tabs crudos dentro de los textos (algunos modelos los mandan sin escapar).
  */
 export function parseJsonReply(completion: OpenAI.Chat.Completions.ChatCompletion): unknown {
-  const text = (completion.choices[0]?.message?.content ?? "").trim();
+  // Algunos modelos ponen su razonamiento antes de la respuesta, entre <think>…</think>.
+  const text = (completion.choices[0]?.message?.content ?? "").replace(/^\s*<think>[\s\S]*?<\/think>/, "").trim();
   if (!text) return {};
   try {
     return JSON.parse(text);
@@ -181,7 +294,7 @@ export async function completeJsonWithTools(req: JsonRequest & { tools: Tool[]; 
 
   let completion: OpenAI.Chat.Completions.ChatCompletion;
   try {
-    completion = await client.chat.completions.create({ ...base, messages, tool_choice: "auto" }, callOptions(deadline));
+    completion = await create(client, { ...base, messages, tool_choice: "auto" }, deadline, req.hooks);
     for (let round = 0; round < maxRounds; round++) {
       const msg = completion.choices[0]?.message;
       const calls = (msg?.tool_calls ?? []).filter((c) => c.type === "function");
@@ -201,7 +314,7 @@ export async function completeJsonWithTools(req: JsonRequest & { tools: Tool[]; 
       }
       if (deadline - Date.now() < MIN_CALL_MS) throw new Error("chef deadline reached");
       const last = round === maxRounds - 1;
-      completion = await client.chat.completions.create({ ...base, messages, tool_choice: last ? "none" : "auto" }, callOptions(deadline));
+      completion = await create(client, { ...base, messages, tool_choice: last ? "none" : "auto" }, deadline, req.hooks);
     }
   } catch (e) {
     if (!(e instanceof OpenAI.BadRequestError)) throw e;

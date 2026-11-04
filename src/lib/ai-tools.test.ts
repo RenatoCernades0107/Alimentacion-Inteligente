@@ -92,3 +92,49 @@ describe("respuestas JSON robustas", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("con streaming (pensamientos en vivo)", () => {
+  beforeEach(() => {
+    create.mockReset();
+    vi.stubEnv("INFERHUB_API_KEY", "k");
+  });
+
+  async function* stream(deltas: Record<string, unknown>[]) {
+    for (const delta of deltas) yield { choices: [{ index: 0, delta, finish_reason: null }] };
+  }
+
+  it("va pasando el razonamiento, ejecuta herramientas y arma la respuesta", async () => {
+    const run = vi.fn().mockResolvedValue("resultado");
+    const thoughts: string[] = [];
+    const onAnswerStart = vi.fn();
+    create
+      .mockResolvedValueOnce(
+        stream([
+          { reasoning_content: "Busco datos. " },
+          { tool_calls: [{ index: 0, id: "1", type: "function", function: { name: "buscar_web", arguments: '{"consulta":' } }] },
+          { tool_calls: [{ index: 0, function: { arguments: '"hierro"}' } }] },
+        ]),
+      )
+      .mockResolvedValueOnce(stream([{ reasoning_content: "Ya sé." }, { content: '{"message":' }, { content: '"listo"}' }]));
+    const out = await completeJsonWithTools({
+      ...req([{ name: "buscar_web", description: "", parameters: {}, run }]),
+      hooks: { onReasoning: (t) => thoughts.push(t), onAnswerStart },
+    });
+    expect(out).toEqual({ message: "listo" });
+    expect(run).toHaveBeenCalledWith({ consulta: "hierro" });
+    expect(thoughts).toEqual(["Busco datos. ", "Ya sé."]);
+    expect(onAnswerStart).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0].stream).toBe(true);
+  });
+
+  it("si el proveedor no acepta streaming, repite la llamada sin él", async () => {
+    const thoughts: string[] = [];
+    create
+      .mockRejectedValueOnce(new (OpenAI.BadRequestError as unknown as new (m: string) => Error)("no stream"))
+      .mockResolvedValueOnce(reply({ content: '{"ok":1}', reasoning_content: "pensé" }));
+    const out = await completeJsonWithTools({ ...req([]), hooks: { onReasoning: (t) => thoughts.push(t) } });
+    expect(out).toEqual({ ok: 1 });
+    expect(create.mock.calls[1][0].stream).toBeUndefined();
+    expect(thoughts).toEqual(["pensé"]);
+  });
+});

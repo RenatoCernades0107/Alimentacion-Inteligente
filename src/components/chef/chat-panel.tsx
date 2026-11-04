@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ArrowUp, Check, Copy, ExternalLink, Globe, Heart, LayoutList, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowUp, Brain, Check, ChevronRight, Copy, ExternalLink, Globe, Heart, LayoutList, Loader2, SlidersHorizontal, Sparkles } from "lucide-react";
 import { RichText } from "@/components/chef/rich-text";
 import { GOAL_EMOJI } from "@/components/chef/prefs-panel";
-import type { ChefPrefs, DayTargets, UiMessage } from "@/lib/chef";
+import type { ChefPrefs, DayTargets, Thinking, UiMessage } from "@/lib/chef";
 import { cn } from "@/lib/utils";
 
 /** Sugerencia de la pantalla vacía: el texto que se envía y, si aplica, cómo deja los ajustes. */
@@ -81,8 +81,12 @@ export function Welcome({
   );
 }
 
+/** Lo que el Chef va pensando mientras responde (pasos y razonamiento del modelo, en vivo). */
+export type LiveThinking = { steps: string[]; text: string; startedAt: number };
+
 /** Conversación: burbujas del usuario a la derecha y respuestas del Chef a todo el ancho. */
-export function Messages({ messages, pending, onShowPlan }: { messages: UiMessage[]; pending: boolean; onShowPlan: () => void }) {
+export function Messages({ messages, live, onShowPlan }: { messages: UiMessage[]; live: LiveThinking | null; onShowPlan: () => void }) {
+  const pending = !!live;
   const t = useTranslations("chef");
   const end = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<number | null>(null);
@@ -121,6 +125,7 @@ export function Messages({ messages, pending, onShowPlan }: { messages: UiMessag
           <li key={i} className="flex gap-2.5">
             <ChefAvatar className="mt-0.5" />
             <div className="min-w-0 flex-1">
+              {m.thinking && <ThoughtToggle thinking={m.thinking} />}
               <div
                 className={cn(
                   "text-[15px] leading-relaxed break-words",
@@ -176,19 +181,113 @@ export function Messages({ messages, pending, onShowPlan }: { messages: UiMessag
           </li>
         ),
       )}
-      {pending && (
-        <li className="flex items-center gap-2.5">
-          <ChefAvatar />
-          <span className="flex items-center gap-1" aria-label={t("thinking")}>
-            {[0, 150, 300].map((d) => (
-              <span key={d} className="size-2 animate-bounce rounded-full bg-fuchsia-500" style={{ animationDelay: `${d}ms` }} />
-            ))}
-          </span>
-          <span className="text-sm text-muted-foreground">{t("thinkingShort")}</span>
+      {live && (
+        <li className="flex gap-2.5">
+          <ChefAvatar className="mt-0.5" />
+          <ThinkingLive live={live} onGrow={() => end.current?.scrollIntoView({ block: "end" })} />
         </li>
       )}
       <div ref={end} />
     </ul>
+  );
+}
+
+/** Segundos desde que empezó a pensar (se actualiza cada segundo). */
+function useElapsed(since: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return Math.max(0, Math.round((now - since) / 1000));
+}
+
+/** Mientras responde: los pasos que va dando y su razonamiento, que se va escribiendo. */
+function ThinkingLive({ live, onGrow }: { live: LiveThinking; onGrow: () => void }) {
+  const t = useTranslations("chef");
+  const seconds = useElapsed(live.startedAt);
+  const box = useRef<HTMLDivElement>(null);
+  const steps = live.steps.length ? live.steps : [t("steps.sending")];
+
+  // El razonamiento se sigue desde el final (como si se leyera mientras escribe).
+  useEffect(() => {
+    if (box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [live.text]);
+  // Cada paso nuevo baja la conversación para que se vea.
+  const grow = useRef(onGrow);
+  useEffect(() => {
+    grow.current = onGrow;
+  });
+  const hasText = live.text.length > 0;
+  useEffect(() => {
+    grow.current();
+  }, [steps.length, hasText]);
+
+  return (
+    <div className="min-w-0 flex-1 rounded-2xl border border-fuchsia-200/70 bg-fuchsia-50/40 p-3 dark:border-fuchsia-900/60 dark:bg-fuchsia-950/20" aria-live="polite" aria-label={t("thinking")}>
+      <p className="flex items-center gap-1.5 text-sm font-medium">
+        <Brain className="size-4 text-fuchsia-600 motion-safe:animate-pulse" />
+        <span className="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-orange-500 bg-clip-text text-transparent">{t("thinkingShort")}</span>
+        <span className="ml-auto text-xs text-muted-foreground tabular-nums">{seconds} s</span>
+      </p>
+      <StepList steps={steps} running className="mt-2" />
+      {live.text && (
+        <div
+          ref={box}
+          className="mt-2 max-h-40 overflow-y-auto border-l-2 border-fuchsia-300 pl-3 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-muted-foreground dark:border-fuchsia-800"
+        >
+          {live.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StepList({ steps, running, className }: { steps: string[]; running?: boolean; className?: string }) {
+  return (
+    <ol className={cn("space-y-1", className)}>
+      {steps.map((s, i) => {
+        const current = running && i === steps.length - 1;
+        return (
+          <li key={i} className={cn("flex items-start gap-2 text-xs", current ? "text-foreground" : "text-muted-foreground")}>
+            {current ? (
+              <Loader2 className="mt-px size-3.5 shrink-0 animate-spin text-fuchsia-600" />
+            ) : (
+              <Check className="mt-px size-3.5 shrink-0 text-emerald-600" />
+            )}
+            <span className="min-w-0 break-words">{s}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Bajo una respuesta: "Pensó 8 s", que se abre para ver los pasos y el razonamiento. */
+function ThoughtToggle({ thinking }: { thinking: Thinking }) {
+  const t = useTranslations("chef");
+  const [open, setOpen] = useState(false);
+  const seconds = Math.max(1, Math.round(thinking.ms / 1000));
+  if (!thinking.steps.length && !thinking.text) return null;
+  return (
+    <div className="mb-1.5">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label={open ? t("hideThinking") : t("showThinking")}
+        className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-0.5 text-xs font-medium text-muted-foreground active:bg-muted"
+      >
+        <Brain className="size-3.5" />
+        {t("thoughtFor", { seconds })}
+        <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+      </button>
+      {open && (
+        <div className="mt-1.5 mb-2 border-l-2 border-muted pl-3">
+          <StepList steps={thinking.steps} />
+          {thinking.text && <p className="mt-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-muted-foreground">{thinking.text}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 

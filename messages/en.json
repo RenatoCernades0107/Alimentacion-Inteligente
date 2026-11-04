@@ -959,7 +959,32 @@
       "copyText": "Copy plan as text",
       "textCopied": "Plan copied. Paste it anywhere."
     },
-    "share": "Share"
+    "share": "Share",
+    "steps": {
+      "context": "Reviewing your goal and {count} dishes in the catalog",
+      "search": "Searching the web: “{query}”",
+      "read": "{count, plural, =0 {No sources found} one {Read # source} other {Read # sources}}",
+      "answer": "Writing the answer",
+      "recipe": "Created the recipe: {name}",
+      "sending": "Sending your message to the Chef"
+    },
+    "thoughtFor": "{seconds, plural, one {Thought for # s} other {Thought for # s}}",
+    "showThinking": "See what it thought",
+    "hideThinking": "Hide what it thought",
+    "custom": {
+      "badge": "New",
+      "title": "New recipe by the Chef",
+      "hint": "The Chef created this recipe for you. It will be saved to Recipes when you add the plan to the calendar.",
+      "ingredients": "Ingredients",
+      "steps": "Preparation",
+      "servings": "{count, plural, one {# serving} other {# servings}}",
+      "toTaste": "to taste",
+      "optional": "optional",
+      "perServing": "Per serving",
+      "view": "View recipe",
+      "willSave": "{count, plural, one {# new recipe will be saved to Recipes.} other {# new recipes will be saved to Recipes.}}",
+      "saved": "{count, plural, one {# new recipe saved to Recipes.} other {# new recipes saved to Recipes.}}"
+    }
   },
   "share": {
     "badge": "Shared plan · Chef AI",
