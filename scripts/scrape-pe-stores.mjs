@@ -1,4 +1,4 @@
-// Recolecta productos de supermercados peruanos (Plaza Vea, Wong, Tottus, Tambo),
+// Recolecta productos de supermercados peruanos (Plaza Vea, Wong, Metro, Tottus, Tambo) con su precio,
 // los asocia a un alimento genérico del catálogo y une los repetidos entre cadenas.
 // Resultado: supabase/data/pe_store_products.json (luego: node scripts/build-seed.mjs)
 //
@@ -6,14 +6,15 @@
 //   node scripts/scrape-pe-stores.mjs            recorre las categorías de comida (~10 min) y guarda caché
 //   node scripts/scrape-pe-stores.mjs --cached   reprocesa la última consulta (para ajustar reglas)
 //   … --unmatched                                  además lista los productos sin alimento (para ampliar foods.mjs)
-// No guarda precios.
+// Guarda el precio de cada producto en cada tienda (stores[].price, en soles): build-seed.mjs saca de ahí la
+// mediana del precio por kg de cada alimento y tienda (food_store_prices) para el costo de los platos.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { foods } from "../supabase/data/foods.mjs";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
 const DELAY_MS = 350;
 const CACHE = new URL("../node_modules/.cache/pe-stores-raw.json", import.meta.url);
-const ORDER = ["plazavea", "wong", "tottus", "tambo"];
+const ORDER = ["plazavea", "wong", "metro", "tottus", "tambo"];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ───────────────────────── Normalización ─────────────────────────
@@ -122,19 +123,31 @@ async function getJSON(url) {
 // Se recorren completas las categorías de comida de cada cadena (no solo búsquedas por nombre),
 // así aparecen también los alimentos que aún no están en el catálogo (ver --unmatched).
 
-/** Plaza Vea y Wong usan VTEX (API pública de catálogo). */
+/** Plaza Vea, Wong y Metro usan VTEX (API pública de catálogo). */
 const VTEX_STORES = {
   // Frutas y verduras, abarrotes, desayunos, panadería, quesos y fiambres, carnes, lácteos, congelados.
   plazavea: { host: "www.plazavea.com.pe", categories: [77, 431, 478, 493, 621, 814, 845, 210] },
   // Frutas y verduras, congelados, embutidos, abarrotes, desayuno, carnes, panadería, lácteos.
   wong: { host: "www.wong.pe", categories: [800, 1200, 1400, 1700, 1001253, 1001327, 1001374, 1001436] },
+  // Metro (Cencosud, como Wong): las categorías de comida se eligen por nombre del árbol de categorías.
+  metro: { host: "www.metro.pe", categoryNames: /frutas|verduras|carnes|aves|pescados|l[aá]cteos|huevos|abarrotes|desayuno|panader|embutidos|fiambres|quesos|congelados/i },
 };
 const VTEX_MAX = 2500; // la API no pagina más allá: las categorías más grandes se recorren por subcategoría
 
+/** Precio de una oferta VTEX (el que se paga hoy); null si no hay stock o no tiene precio. */
+const vtexPrice = (item) => {
+  const offer = item.sellers?.find((s) => s.sellerDefault)?.commertialOffer ?? item.sellers?.[0]?.commertialOffer;
+  return offer?.Price > 0 && offer.AvailableQuantity !== 0 ? offer.Price : null;
+};
+
 const vtexItem = (store) => (p) => {
   const item = p.items?.[0] ?? {};
+  // Lo que se vende por peso ("Tomate x kg") no lleva el tamaño en el nombre: el precio es por kg × multiplicador.
+  const byWeight = /^kg$/i.test(item.measurementUnit ?? "") ? { quantity: item.unitMultiplier || 1, unit: "kg" } : null;
   return {
     store,
+    price: vtexPrice(item),
+    byWeight,
     name: p.productName,
     brand: p.brand || null,
     barcode: /^\d{8,14}$/.test(item.ean ?? "") ? item.ean : null,
@@ -145,8 +158,10 @@ const vtexItem = (store) => (p) => {
 };
 
 async function vtexAll(store) {
-  const { host, categories } = VTEX_STORES[store];
+  const { host, categoryNames } = VTEX_STORES[store];
   const tree = (await getJSON(`https://${host}/api/catalog_system/pub/category/tree/3`)) ?? [];
+  const categories = VTEX_STORES[store].categories ?? tree.filter((n) => categoryNames.test(n.name)).map((n) => n.id);
+  if (!categories.length) console.warn(`  ${store}: no se encontraron categorías de comida`);
   const findNode = (nodes, id) => {
     for (const n of nodes) {
       const found = n.id === id ? n : findNode(n.children ?? [], id);
@@ -179,6 +194,15 @@ async function vtexAll(store) {
 /** Tottus: listado por categoría (48 por página). */
 // Frutas y verduras, abarrotes, carnes, desayunos, huevos y fiambres, lácteos, panadería, congelados, repostería, snacks.
 const TOTTUS_CATEGORIES = ["CATG16050", "CATG16066", "CATG16076", "CATG16065", "CATG16060", "CATG16061", "CATG16071", "CATG16062", "CATG16056", "CATG16058"];
+/** Precio de Tottus sin tarjeta CMR: el menor de los no tachados. */
+function tottusPrice(p) {
+  const values = (p.prices ?? [])
+    .filter((x) => !x.crossed && !/cmr/i.test(x.type ?? ""))
+    .map((x) => parseFloat(String(x.price?.[0] ?? "").replace(/,/g, "")))
+    .filter((v) => v > 0);
+  return values.length ? Math.min(...values) : null;
+}
+
 async function tottusAll() {
   const out = [];
   for (const cat of TOTTUS_CATEGORIES) {
@@ -189,6 +213,8 @@ async function tottusAll() {
       out.push(
         ...results.map((p) => ({
           store: "tottus",
+          price: tottusPrice(p),
+          byWeight: /kg/i.test(p.prices?.[0]?.unit ?? "") ? { quantity: 1, unit: "kg" } : null,
           name: p.displayName,
           brand: p.brand ? p.brand.charAt(0) + p.brand.slice(1).toLowerCase() : null,
           barcode: null,
@@ -240,8 +266,8 @@ async function tamboAll() {
 }
 
 async function fetchAll() {
-  console.log("Recorriendo las categorías de comida de Plaza Vea, Wong, Tottus y Tambo…");
-  const parts = await Promise.all([vtexAll("plazavea"), vtexAll("wong"), tottusAll(), tamboAll()]);
+  console.log("Recorriendo las categorías de comida de Plaza Vea, Wong, Metro, Tottus y Tambo…");
+  const parts = await Promise.all([vtexAll("plazavea"), vtexAll("wong"), vtexAll("metro"), tottusAll(), tamboAll()]);
   return parts.flat();
 }
 
@@ -276,7 +302,8 @@ function merge(items) {
 
   for (const r of items) {
     const brandKey = r.brand ? words(r.brand).join(" ") : inferBrand(r.name, knownBrands);
-    const size = parseSize(r.name);
+    const parsed = parseSize(r.name);
+    const size = parsed.quantity == null && r.byWeight ? r.byWeight : parsed;
     const item = { ...r, brandKey, size, base: toBase(size.quantity, size.unit), pack: parsePack(r.name), toks: tokens(r.name, brandKey) };
 
     let group = item.barcode ? byBarcode.get(item.barcode) : undefined;
@@ -295,7 +322,7 @@ function merge(items) {
       group.barcodes.add(item.barcode);
       byBarcode.set(item.barcode, group);
     }
-    if (!group.stores.has(item.store)) group.stores.set(item.store, item.url);
+    if (!group.stores.has(item.store)) group.stores.set(item.store, { url: item.url, price: item.price ?? null });
     group.image ??= item.image;
     group.brand ??= item.brand;
     if (group.base === null && item.base !== null) Object.assign(group, { size: item.size, base: item.base });
@@ -310,7 +337,7 @@ function merge(items) {
     pack: g.pack,
     image: g.image,
     food: g.food,
-    stores: ORDER.filter((s) => g.stores.has(s)).map((s) => ({ store: s, url: g.stores.get(s) })),
+    stores: ORDER.filter((s) => g.stores.has(s)).map((s) => ({ store: s, ...g.stores.get(s) })),
   }));
 }
 
@@ -363,3 +390,6 @@ const byCount = {};
 for (const p of products) byCount[p.stores.length] = (byCount[p.stores.length] ?? 0) + 1;
 console.log("Productos por tienda:", perStore);
 console.log(`${products.length} productos únicos. Por número de cadenas:`, byCount);
+const priced = {};
+for (const p of products) for (const s of p.stores) if (s.price > 0) priced[s.store] = (priced[s.store] ?? 0) + 1;
+console.log("Productos con precio por tienda:", priced);

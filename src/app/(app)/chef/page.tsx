@@ -20,7 +20,7 @@ export default async function ChefPage({ searchParams }: PageProps<"/chef">) {
   const start = isValidDate(date) && date > today ? date : today;
 
   const [{ cards, busy }, target, drafts] = await Promise.all([
-    loadChefData(supabase, family.id, today, locale),
+    loadChefData(supabase, family.id, today, locale, false, family.store),
     loadMyTarget(supabase, user.id, family.timezone),
     loadDraftList(supabase),
   ]);

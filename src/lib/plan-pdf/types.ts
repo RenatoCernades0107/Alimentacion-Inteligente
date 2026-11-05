@@ -24,6 +24,8 @@ export type PlanMeal = {
   /** null si es una comida escrita a mano, sin receta. */
   recipe: PlanRecipe | null;
   items: PlanItem[];
+  /** Costo en S/ de cocinarla (receta × multiplicador de porciones); null sin receta o sin precios. */
+  cost: { total: number; complete: boolean } | null;
 };
 
 export type PlanShopping = {
@@ -52,4 +54,6 @@ export type PlanData = {
   showPlan: boolean;
   /** Lista de compras; null si no se pidió. */
   shopping: PlanShopping | null;
+  /** Tienda de la familia de la que salen los precios (nombre para mostrar). */
+  storeName: string;
 };

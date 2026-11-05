@@ -5,7 +5,8 @@ import { loadRecipesAndInventory } from "@/lib/recipes";
 import { suggest } from "@/lib/suggestions";
 import { MAX_DAYS_AHEAD, slotKey, toCard, type CalendarMeal, type DishCard, type SlotKey } from "@/lib/chef";
 import { FOOD_COLUMNS, type ChefFood } from "@/lib/chef-custom";
-import { mealName, type Meal } from "@/lib/types";
+import { loadPrices } from "@/lib/cost";
+import { mealName, type Meal, type PriceStore } from "@/lib/types";
 
 /** Días hacia atrás de comidas que ve el Chef (para respetar lo que la persona suele comer). */
 export const HISTORY_DAYS = 14;
@@ -19,9 +20,17 @@ const MEAL_COLUMNS = "id, date, slot, title, status, series_id, recipe_id, recip
  * `calendar`: las comidas de cada franja). Con `withFoods` también los alimentos que ve (catálogo y de su
  * familia), el inventario y las comidas de los últimos días, para las recetas nuevas y el contexto.
  */
-export async function loadChefData(supabase: SupabaseClient, familyId: string, today: string, locale: string, withFoods = false) {
+export async function loadChefData(
+  supabase: SupabaseClient,
+  familyId: string,
+  today: string,
+  locale: string,
+  withFoods = false,
+  /** Tienda de la familia: las tarjetas llevan el costo con sus precios. */
+  store: PriceStore = "plazavea",
+) {
   const until = addDays(today, MAX_DAYS_AHEAD);
-  const [{ recipes, inventory }, { data: meals }, { data: foods }, { data: past }] = await Promise.all([
+  const [{ recipes, inventory }, { data: meals }, { data: foods }, { data: past }, prices] = await Promise.all([
     loadRecipesAndInventory(supabase, familyId),
     supabase.from("meals").select(MEAL_COLUMNS).eq("family_id", familyId).gte("date", today).lte("date", until).neq("status", "cancelled"),
     withFoods ? supabase.from("foods").select(FOOD_COLUMNS).order("name_es") : Promise.resolve({ data: null }),
@@ -35,8 +44,9 @@ export async function loadChefData(supabase: SupabaseClient, familyId: string, t
           .neq("status", "cancelled")
           .order("date")
       : Promise.resolve({ data: null }),
+    loadPrices(supabase, store),
   ]);
-  const cards: DishCard[] = suggest(recipes, inventory, { mode: "any", countries: ["PE", "US"], today }).map(toCard);
+  const cards: DishCard[] = suggest(recipes, inventory, { mode: "any", countries: ["PE", "US"], today }).map((s) => toCard(s, prices));
   const busy = new Map<SlotKey, string>();
   const calendar = new Map<SlotKey, CalendarMeal[]>();
   for (const m of (meals ?? []) as unknown as MealRow[]) {
@@ -46,5 +56,5 @@ export async function loadChefData(supabase: SupabaseClient, familyId: string, t
     calendar.set(key, [...(calendar.get(key) ?? []), { id: m.id, name, status: m.status, seriesId: m.series_id, recipeId: m.recipe_id }]);
   }
   const history = ((past ?? []) as unknown as MealRow[]).map((m) => ({ date: m.date, slot: m.slot, name: mealName(m, locale), done: m.status === "completed" }));
-  return { cards, busy, calendar, history, foods: (foods ?? []) as unknown as ChefFood[], inventory };
+  return { cards, busy, calendar, history, foods: (foods ?? []) as unknown as ChefFood[], inventory, prices };
 }

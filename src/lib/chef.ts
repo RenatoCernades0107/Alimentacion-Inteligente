@@ -11,6 +11,7 @@ import { addDays, daysBetween } from "./dates";
 import { mealTypeForSlot } from "./meals";
 import { kcalPerServing, macrosPerServing, portionFor, slotShare, type NutritionItem } from "./nutrition";
 import type { Suggestion } from "./suggestions";
+import { recipeCost, type PriceMap } from "./cost";
 import type { Country, MealSlot, Unit } from "./types";
 
 // ───────────────────────────────────────────── Tipos ─────────────────────────────────────────────
@@ -50,6 +51,12 @@ export type DishCard = {
   meat: boolean;
   /** Receta nueva inventada por el Chef (vive en el borrador hasta pasarla al calendario). */
   custom?: boolean;
+  /** Costo de la receta completa en S/ con los precios de la tienda de la familia; null u omitido = sin precios. */
+  cost?: number | null;
+  /** Costo por porción en S/. */
+  costPerServing?: number | null;
+  /** false si a algún ingrediente obligatorio le falta el precio (el costo es aproximado). */
+  costComplete?: boolean;
 };
 
 /** Ingrediente de una receta inventada por el Chef (siempre un alimento existente). */
@@ -225,7 +232,7 @@ export const MAX_DAYS_AHEAD = 20;
 type RecipeWithIngredients = Suggestion["recipe"];
 
 /** Tarjeta de un plato a partir de la receta (con ingredientes) y lo que dice `suggest` del inventario. */
-export function toCard(s: Suggestion): DishCard {
+export function toCard(s: Suggestion, prices?: PriceMap): DishCard {
   const r: RecipeWithIngredients = s.recipe;
   const items: NutritionItem[] = (r.recipe_ingredients ?? []).map((i) => ({
     quantity: i.quantity,
@@ -235,6 +242,8 @@ export function toCard(s: Suggestion): DishCard {
   }));
   const m = macrosPerServing(items, r.servings);
   const kcal = r.kcal_per_serving ?? (items.length ? kcalPerServing(items, r.servings).kcal : null);
+  const ingredients = (r.recipe_ingredients ?? []).filter((i) => i.food);
+  const cost = prices?.size && ingredients.length ? recipeCost(ingredients.map((i) => ({ ...i, food: i.food! })), prices, r.servings) : null;
   return {
     id: r.id,
     slug: r.slug,
@@ -253,7 +262,35 @@ export function toCard(s: Suggestion): DishCard {
     total: s.total,
     expiring: s.expiringUsed > 0,
     meat: (r.recipe_ingredients ?? []).some((i) => !i.optional && (i.food?.category === "meat" || i.food?.category === "seafood")),
+    ...(cost && cost.total > 0 ? { cost: round2(cost.total), costPerServing: round2(cost.perServing), costComplete: cost.complete } : {}),
   };
+}
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * Lo que cuesta cocinar el plan (cada plato una vez, como rinde la receta) en los días dados.
+ * `count` son los platos con costo; `complete` es false si alguno no tiene precio o le falta alguno.
+ */
+export function planCost(plan: Plan, dates: string[], slots: MealSlot[], cards: ReadonlyMap<string, DishCard>) {
+  let total = 0;
+  let complete = true;
+  let count = 0;
+  for (const date of dates) {
+    for (const slot of slots) {
+      const entry = plan[slotKey(date, slot)];
+      const card = entry && cards.get(entry.recipeId);
+      if (!card) continue;
+      if (card.cost == null) {
+        complete = false;
+        continue;
+      }
+      total += card.cost;
+      complete &&= card.costComplete !== false;
+      count++;
+    }
+  }
+  return { total, complete, count };
 }
 
 /** Porción de quien mira para un plato en una franja (como en el calendario) y lo que aporta. */

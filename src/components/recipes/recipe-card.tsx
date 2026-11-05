@@ -6,6 +6,7 @@ import { FavoriteButton } from "@/components/recipes/favorite-button";
 import { Badge } from "@/components/ui/badge";
 import { MacroInline } from "@/components/chef/macros";
 import { macrosPerServing } from "@/lib/nutrition";
+import { formatPen, recipeCost, type PriceMap } from "@/lib/cost";
 import type { Suggestion } from "@/lib/suggestions";
 import { localName } from "@/lib/types";
 
@@ -17,12 +18,14 @@ export type RecipeOwner = { kind: "mine" | "myVersion" | "family" } | { kind: "m
  * interactivos; el nombre deja espacio a la derecha para que no se pise con él.
  */
 export async function RecipeCard({
-  suggestion: { recipe, have, total, missing, expiringUsed }, locale, favorite, owner,
+  suggestion: { recipe, have, total, missing, expiringUsed }, locale, favorite, owner, prices,
 }: {
   suggestion: Suggestion;
   locale: string;
   favorite: boolean;
   owner: RecipeOwner;
+  /** Precios de la tienda de la familia; sin ellos no se muestra el costo. */
+  prices?: PriceMap;
 }) {
   const t = await getTranslations("recipes");
   const tm = await getTranslations("myRecipes");
@@ -36,6 +39,7 @@ export async function RecipeCard({
 
   const ingredients = (recipe.recipe_ingredients ?? []).filter((i) => i.food);
   const macros = macrosPerServing(ingredients.map((i) => ({ ...i, food: i.food! })), recipe.servings);
+  const cost = prices?.size && ingredients.length ? recipeCost(ingredients.map((i) => ({ ...i, food: i.food! })), prices, recipe.servings) : null;
 
   return (
     <div className="relative">
@@ -60,6 +64,11 @@ export async function RecipeCard({
                 {recipe.kcal_complete ? "≈" : "~"} {recipe.kcal_per_serving} kcal
               </span>
             ) : null}
+            {cost && cost.total > 0 && (
+              <span className="text-muted-foreground tabular-nums">
+                {t("costPerServingShort", { cost: formatPen(cost.perServing, { approx: !cost.complete }) })}
+              </span>
+            )}
           </div>
           {ingredients.length > 0 && macros.complete && <MacroInline macros={macros} className="text-xs text-muted-foreground" />}
         </div>

@@ -84,6 +84,7 @@ export default async function FamilyPage() {
           isParent={isParent}
           familyName={family.name}
           mealsPerDay={family.meals_per_day}
+          store={family.store ?? "plazavea"}
           locale={profile.locale}
         />
       </Section>

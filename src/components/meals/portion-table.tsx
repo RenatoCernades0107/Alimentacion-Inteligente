@@ -10,6 +10,7 @@ import { MemberAvatar } from "@/components/family/member-avatar";
 import { MacroInline, MacroStack } from "@/components/chef/macros";
 import { MAX_SCALE, MIN_SCALE, formatPortion, suggestedScale } from "@/lib/nutrition";
 import { formatQuantity } from "@/lib/units";
+import { formatPen } from "@/lib/cost";
 import type { PortionsData } from "@/lib/portions";
 
 type Loaded = { mealId: string; data: PortionsData | null };
@@ -164,6 +165,14 @@ export function PortionTable({
 
       {cooking !== null && data.recipeServings && (
         <div className="space-y-2 border-t p-3">
+          {data.cost && (
+            <div>
+              <p className="text-sm font-semibold tabular-nums">{t("cost", { cost: formatPen(data.cost.recipeTotal * scale, { approx: !data.cost.complete }) })}</p>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {t("costHint", { servings: formatQuantity(+cooking.toFixed(2)), store: data.cost.store, perServing: formatPen(data.cost.perServing, { approx: !data.cost.complete }) })}
+              </p>
+            </div>
+          )}
           {showSuggestion && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-primary/5 p-2.5">
               <p className="min-w-0 flex-1 text-sm">

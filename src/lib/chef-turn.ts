@@ -71,8 +71,8 @@ export async function runChefTurn(session: Member, raw: unknown, locale: "es" | 
   const step = (text: string) => emit({ type: "step", text });
 
   const today = todayIn(family.timezone);
-  const [{ cards, busy, calendar, history: past, foods, inventory }, body, favoriteIds, familyTargets] = await Promise.all([
-    loadChefData(supabase, family.id, today, locale, true),
+  const [{ cards, busy, calendar, history: past, foods, inventory, prices }, body, favoriteIds, familyTargets] = await Promise.all([
+    loadChefData(supabase, family.id, today, locale, true, family.store),
     loadMyBody(supabase, user.id, family.timezone),
     loadFavoriteIds(supabase, user.id),
     // Solo nombre y kcal de cada integrante (datos derivados); si falla, el Chef sigue sin ese contexto.
@@ -90,7 +90,7 @@ export async function runChefTurn(session: Member, raw: unknown, locale: "es" | 
 
   // Recetas nuevas del borrador: la tarjeta (kcal, macros, en casa) se recalcula aquí, nunca se confía en el cliente.
   const foodsById = new Map(foods.map((f) => [f.id, f]));
-  const dishCtx = { foods: foodsById, inventory, today };
+  const dishCtx = { foods: foodsById, inventory, today, prices };
   const custom: CustomDish[] = Object.entries(input.custom ?? {})
     .map(([id, r]) => customDish(id, r as CustomRecipe, dishCtx))
     .filter((d): d is CustomDish => !!d);

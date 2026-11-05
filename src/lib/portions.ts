@@ -53,6 +53,8 @@ export type PortionsData = {
   /** Multiplicador que alcanza para todos; null si no aplica o ya coincide con el actual. */
   suggestedScale: number | null;
   rows: PortionRow[];
+  /** Costo con los precios de la tienda de la familia (lo agrega la ruta de porciones); null sin receta o sin precios. */
+  cost?: { recipeTotal: number; perServing: number; complete: boolean; store: string } | null;
 };
 
 /** Reparte una comida entre los integrantes según la meta diaria de cada uno. */

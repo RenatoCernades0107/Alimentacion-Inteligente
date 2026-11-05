@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { requireMember } from "@/lib/session";
+import { loadPrices } from "@/lib/cost";
 import { todayIn } from "@/lib/dates";
 import { suggest, type SuggestionMode } from "@/lib/suggestions";
 import { loadFavoriteIds, loadMemberNames, loadRecipesAndInventory, parseCountries } from "@/lib/recipes";
@@ -29,10 +30,11 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
   const tmt = await getTranslations("mealTypes");
   const locale = await getLocale();
 
-  const [{ recipes, inventory }, favorites, memberNames] = await Promise.all([
+  const [{ recipes, inventory }, favorites, memberNames, prices] = await Promise.all([
     loadRecipesAndInventory(supabase, family.id),
     loadFavoriteIds(supabase, user.id),
     loadMemberNames(supabase, family.id),
+    loadPrices(supabase, family.store ?? "plazavea"),
   ]);
 
   // Los filtros de país y comida y el modo "con lo que tengo" aplican dentro de cada pestaña.
@@ -135,7 +137,7 @@ export default async function RecipesPage({ searchParams }: PageProps<"/recipes"
         <ul className="mt-4 space-y-3">
           {results.map((s) => (
             <li key={s.recipe.id}>
-              <RecipeCard suggestion={s} locale={locale} favorite={favorites.has(s.recipe.id)} owner={ownerOf(s.recipe)} />
+              <RecipeCard suggestion={s} locale={locale} favorite={favorites.has(s.recipe.id)} owner={ownerOf(s.recipe)} prices={prices} />
             </li>
           ))}
         </ul>

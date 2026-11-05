@@ -14,6 +14,7 @@ import {
   copyDay,
   pasteClip,
   planToText,
+  planCost,
   rebaseDraft,
   migrateDraft,
   calendarOps,
@@ -114,6 +115,22 @@ describe("plan de respaldo", () => {
     expect(t.filled).toBe(2);
     // Almuerzo 40 % de 2000 = 800 kcal → 1½ porciones de 550; cena 35 % = 700 → 2 de 300 (tope).
     expect(t.kcal).toBe(825 + 600);
+  });
+  it("suma el costo de los platos del plan (cada receta completa)", () => {
+    const priced = new Map([
+      ["pollo", card("pollo", { cost: 30, costPerServing: 7.5, costComplete: true })],
+      ["ceviche", card("ceviche", { cost: 40, costPerServing: 10, costComplete: false })],
+      ["lomo", card("lomo")],
+    ]);
+    const plan = {
+      [slotKey(dates[0], "lunch")]: { recipeId: "pollo" },
+      [slotKey(dates[1], "lunch")]: { recipeId: "pollo" },
+      [slotKey(dates[1], "dinner")]: { recipeId: "ceviche" },
+    };
+    expect(planCost(plan, [dates[0]], slots, priced)).toEqual({ total: 30, complete: true, count: 1 });
+    expect(planCost(plan, dates, slots, priced)).toEqual({ total: 100, complete: false, count: 3 });
+    // Un plato sin precios deja el total como aproximado.
+    expect(planCost({ [slotKey(dates[0], "dinner")]: { recipeId: "lomo" } }, dates, slots, priced)).toEqual({ total: 0, complete: false, count: 0 });
   });
 });
 

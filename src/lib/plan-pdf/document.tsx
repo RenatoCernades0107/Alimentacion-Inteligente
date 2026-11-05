@@ -1,6 +1,7 @@
 import { Circle, Document, Font, Image, Link, Page, Path, Polyline, StyleSheet, Svg, Text, View } from "@react-pdf/renderer";
 import { daysBetween, parseDate } from "@/lib/dates";
 import type { MealSlot, Unit } from "@/lib/types";
+import { formatPen, sumCosts } from "@/lib/cost";
 import { CATEGORY_ORDER, formatAmount, formatQuantityUnit, type ShoppingEntry } from "./shopping";
 import type { PlanData, PlanMeal } from "./types";
 
@@ -35,6 +36,11 @@ const SLOT_COLOR: Record<MealSlot, { bg: string; fg: string }> = {
 /** Las fuentes estándar del PDF solo llevan WinAnsi (Latin-1): lo demás (emojis…) se quita para que no salga roto. */
 const NOT_WINANSI = /[^\n -~ -ÿ–—‘’‚“”„†‡•…‰‹›€™ŒœŠšŸŽžƒˆ˜]/g;
 const clean = (text: string) => text.normalize("NFC").replace(NOT_WINANSI, "").replace(/ {2,}/g, " ").trim();
+
+/** Soles para el PDF: "~" en vez de "≈", que no está en las fuentes estándar. */
+const pen = (c: { total: number; complete: boolean }, decimals = 2) => `${c.complete ? "" : "~ "}${formatPen(c.total, { decimals })}`;
+/** Lo que cuenta para el costo: lo que se cocina (planificadas y completadas). */
+const costOfMeals = (meals: PlanMeal[]) => sumCosts(meals.filter((m) => m.status !== "proposed").map((m) => m.cost));
 
 /*
  * Interlineado (react-pdf): un `lineHeight` sin unidad se multiplica por el `fontSize` del MISMO estilo (si no
@@ -132,6 +138,7 @@ export function PlanDocument({ data, t }: { data: PlanData; t: Translate }) {
   const title = data.showPlan ? (shopping ? t("pdf.titleBoth") : t("pdf.titlePlan")) : t("pdf.titleShopping");
   const toBuy = shopping?.entries.filter((e) => e.status === "buy") ?? [];
   const generated = dateFormat(locale, { day: "numeric", month: "long", year: "numeric" }).format(parseDate(data.today));
+  const cost = data.showPlan ? costOfMeals(data.meals) : { count: 0, total: 0, complete: true };
 
   return (
     <Document title={`${title} – ${period}`} author={appName} creator={appName} language={locale}>
@@ -167,7 +174,9 @@ export function PlanDocument({ data, t }: { data: PlanData; t: Translate }) {
           <Stat value={dates.length} label={t("pdf.statDays")} />
           <Stat value={data.meals.length} label={t("pdf.statMeals")} />
           {shopping && <Stat value={toBuy.length} label={t("pdf.statToBuy")} />}
+          {cost.count > 0 && <Stat value={pen(cost, 0)} label={t("pdf.statCost", { store: data.storeName })} />}
         </View>
+        {cost.count > 0 && <Text style={s.note}>{t("pdf.costNote", { store: data.storeName })}</Text>}
 
         {data.showPlan && <Overview data={data} t={t} />}
         {shopping && <Shopping data={data} t={t} unitLabel={unitLabel} />}
@@ -177,7 +186,7 @@ export function PlanDocument({ data, t }: { data: PlanData; t: Translate }) {
   );
 }
 
-function Stat({ value, label }: { value: number; label: string }) {
+function Stat({ value, label }: { value: number | string; label: string }) {
   return (
     <View style={s.stat}>
       <Text style={s.statValue}>{value}</Text>
@@ -348,6 +357,7 @@ function Plan({ data, t, unitLabel }: { data: PlanData; t: Translate; unitLabel:
       <Text style={s.h1}>{t("pdf.planTitle")}</Text>
       {data.dates.map((date) => {
         const meals = data.meals.filter((m) => m.date === date);
+        const dayCost = costOfMeals(meals);
         const [first, ...rest] = meals;
         // Un día sin comidas ocupa una sola línea: así una semana casi vacía no llena páginas.
         if (!first) {
@@ -367,6 +377,7 @@ function Plan({ data, t, unitLabel }: { data: PlanData; t: Translate; unitLabel:
                 <Text style={s.tiny}>
                   {date === data.today ? `${t("pdf.today")}  ·  ` : ""}
                   {t("pdf.mealsCount", { count: meals.length })}
+                  {dayCost.count > 0 ? `  ·  ${t("pdf.dayCost", { cost: pen(dayCost) })}` : ""}
                 </Text>
               </View>
               <MealCard meal={first} t={t} unitLabel={unitLabel} />
@@ -430,6 +441,7 @@ function MealCard({ meal, t, unitLabel }: { meal: PlanMeal; t: Translate; unitLa
                 </View>
               ))}
               <Text style={s.tiny}>{t(`countries.${recipe.country}`)}</Text>
+              {meal.cost && <Text style={s.tiny}>{t("pdf.mealCost", { cost: pen(meal.cost) })}</Text>}
             </View>
           )}
           {recipe?.description && <Text style={{ marginTop: 6, fontSize: 8.5, lineHeight: 1.35, color: COLOR.muted }}>{clean(recipe.description)}</Text>}

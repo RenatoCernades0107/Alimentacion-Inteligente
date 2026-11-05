@@ -12,7 +12,12 @@ export type Family = {
   name: string;
   meals_per_day: 3 | 4 | 5;
   timezone: string;
+  /** Tienda donde compra la familia: de ella salen los precios de los platos (src/lib/cost.ts). */
+  store: PriceStore;
 };
+
+/** Tiendas con precios para el costo de los platos (Tambo no: es una tienda de conveniencia). */
+export type PriceStore = "plazavea" | "wong" | "metro" | "tottus";
 
 export type Profile = {
   id: string;
@@ -46,6 +51,8 @@ export type Food = {
   protein_100g: number | null;
   carbs_100g: number | null;
   fat_100g: number | null;
+  /** Precio estimado en S/ por kg (respaldo de los precios de las tiendas); null en alimentos propios. */
+  est_pen_per_kg?: number | null;
 };
 
 export type InventoryItem = {

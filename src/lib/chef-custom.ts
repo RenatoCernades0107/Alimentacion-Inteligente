@@ -11,6 +11,7 @@ import { MAX_KCAL_PER_SERVING, RECIPE_MEAL_TYPES, isEmoji, type RecipeInput, typ
 import { kcalPerServing } from "./nutrition";
 import { suggest } from "./suggestions";
 import { UNITS } from "./units";
+import type { PriceMap } from "./cost";
 import type { Country, Food, InventoryItem, Recipe, Unit } from "./types";
 
 /** Alimento tal como lo necesita el Chef (para elegir ingredientes y calcular kcal y macros). */
@@ -111,7 +112,7 @@ export function parseNewRecipe(raw: RawNewRecipe, foods: ChefFood[], find = food
 export function customDish(
   id: string,
   recipe: CustomRecipe,
-  ctx: { foods: ReadonlyMap<string, ChefFood>; inventory: InventoryItem[]; today: string },
+  ctx: { foods: ReadonlyMap<string, ChefFood>; inventory: InventoryItem[]; today: string; prices?: PriceMap },
 ): CustomDish | null {
   const ingredients = recipe.ingredients.map((i) => ({ ...i, food: ctx.foods.get(i.foodId) }));
   if (ingredients.some((i) => !i.food)) return null;
@@ -149,7 +150,7 @@ export function customDish(
   };
   const [s] = suggest([fake], ctx.inventory, { mode: "any", countries: [recipe.country], today: ctx.today });
   // Las recetas nuevas no traen las kcal de la base: la tarjeta se arma igual que las del catálogo.
-  return { card: { ...toCard(s), custom: true }, recipe };
+  return { card: { ...toCard(s, ctx.prices), custom: true }, recipe };
 }
 
 /** Slug que ve la IA para una receta nueva ya creada en el borrador. */

@@ -18,7 +18,7 @@ PWA para gestionar el inventario de comida de la familia y planificar sus comida
 | `src/app/api/meals/[id]/portions/` | Tabla de porciones de una comida (se pide al abrirla) |
 | `supabase/tests/` | Pruebas de permisos (RLS + funciones) en SQL: `body_rls.sql`, `recipes_rls.sql`, `chef_drafts_rls.sql`, `chef_shares_rls.sql` (se corren igual: sobre una base desechable con migraciones y seed aplicados) |
 | `supabase/migrations/` | Esquema, RLS (permisos padres/hijos) y funciones |
-| `supabase/data/` | Catálogo de alimentos, sus kcal (`nutrition.mjs`) y recetas (Perú / USA) → `node scripts/build-seed.mjs` genera `supabase/seed.sql` |
+| `supabase/data/` | Catálogo de alimentos, sus kcal (`nutrition.mjs`), sus precios estimados (`prices.mjs`) y recetas (Perú / USA) → `node scripts/build-seed.mjs` genera `supabase/seed.sql` |
 | `messages/` | Textos en español e inglés |
 
 ## Peso, metas y calorías
@@ -85,7 +85,7 @@ Las notificaciones push en iPhone requieren **iOS 16.4+**, **HTTPS** y la app **
 
 ## Fuentes de datos
 
-- **Productos de supermercados peruanos:** Plaza Vea y Wong (API pública de catálogo VTEX), Tottus (API de búsqueda de su web) y Tambo (páginas de categoría). `node scripts/scrape-pe-stores.mjs` recorre completas las categorías de comida de cada cadena (frutas y verduras, abarrotes, carnes, lácteos, panadería, desayunos, congelados, snacks), asocia cada producto a su alimento genérico, une los productos repetidos (por código de barras o por marca + tamaño + nombre) y guarda en qué cadenas aparece. No guarda precios. Con `--cached --unmatched` lista los productos que aún no tienen alimento, para ampliar `supabase/data/foods.mjs`. Después: `node scripts/build-seed.mjs`.
+- **Productos de supermercados peruanos:** Plaza Vea, Wong y Metro (API pública de catálogo VTEX), Tottus (API de búsqueda de su web) y Tambo (páginas de categoría). `node scripts/scrape-pe-stores.mjs` recorre completas las categorías de comida de cada cadena (frutas y verduras, abarrotes, carnes, lácteos, panadería, desayunos, congelados, snacks), asocia cada producto a su alimento genérico, une los productos repetidos (por código de barras o por marca + tamaño + nombre) y guarda en qué cadenas aparece y a qué precio. Con esos precios `build-seed.mjs` calcula la mediana del precio por kg de cada alimento en cada tienda (`food_store_prices`); mientras no se corra, el costo de los platos usa los precios estimados de `supabase/data/prices.mjs`. Con `--cached --unmatched` lista los productos que aún no tienen alimento, para ampliar `supabase/data/foods.mjs`. Después: `node scripts/build-seed.mjs`.
 - **Otros productos de marca y códigos de barras:** [Open Food Facts](https://world.openfoodfacts.org) (datos abiertos, ODbL).
 - **Imágenes de alimentos genéricos:** [TheMealDB](https://www.themealdb.com).
 - **Vida útil estimada:** por tipo de alimento y lugar de guardado (ambiente, refrigerador, congelador), basada en la guía Food Keeper del USDA y contrastada con extensiones universitarias (Virginia Cooperative Extension, UC Davis Postharvest); las fuentes están en el encabezado de `src/lib/shelf-life.ts`. Tubérculos andinos, aguaymanto, frutas exóticas y quesos frescos peruanos son estimaciones prudentes, y las fechas son orientativas: ante la duda, huele y mira antes de comer.

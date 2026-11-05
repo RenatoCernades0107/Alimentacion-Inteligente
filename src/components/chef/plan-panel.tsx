@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { BookOpen, ClipboardCopy, ClipboardPaste, Copy, FileText, Lock, Plus, Repeat2, Wand2, X } from "lucide-react";
+import { BookOpen, ClipboardCopy, ClipboardPaste, Copy, FileText, Lock, Plus, Repeat2, Wallet, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RecipeImage } from "@/components/recipe-image";
 import { KcalRing, MacroStack, MacroTargets } from "@/components/chef/macros";
-import { copyDay, dayTotals, myServing, planToText, slotKey, type DayTargets, type DishCard, type MealClip, type Plan, type SlotKey } from "@/lib/chef";
+import { copyDay, dayTotals, myServing, planCost, planToText, slotKey, type DayTargets, type DishCard, type MealClip, type Plan, type SlotKey } from "@/lib/chef";
 import { formatPortion } from "@/lib/nutrition";
+import { formatPen } from "@/lib/cost";
 import { parseDate } from "@/lib/dates";
 import { localName, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,8 @@ export function PlanPanel({
   const dayLong = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "short", timeZone: "UTC" });
   const selectedDay = dates.includes(day) ? day : dates[0];
   const totals = dayTotals(plan, selectedDay, slots, cardMap, myKcal, mealsPerDay);
+  const dayCost = planCost(plan, [selectedDay], slots, cardMap);
+  const allCost = planCost(plan, dates, slots, cardMap);
   const hasPlan = dates.some((d) => slots.some((s) => plan[slotKey(d, s)]));
   const firstBuild = pending && !hasPlan;
   const dayClip = copyDay(plan, selectedDay, slots);
@@ -152,6 +155,22 @@ export function PlanPanel({
           <MacroTargets totals={totals} targets={targets} />
         </div>
         {targets.estimated && <p className="mt-3 text-xs text-muted-foreground">{t("estimatedTarget")}</p>}
+        {allCost.count > 0 && (
+          <div className="mt-3 border-t pt-3">
+            <div className="flex items-center gap-2 text-sm">
+              <Wallet className="size-4 shrink-0 text-emerald-600" />
+              <span className="flex-1">{t("costDay")}</span>
+              <span className="font-semibold tabular-nums">{dayCost.count > 0 ? formatPen(dayCost.total, { approx: !dayCost.complete }) : "—"}</span>
+            </div>
+            {dates.length > 1 && (
+              <div className="mt-1 flex items-center gap-2 pl-6 text-sm">
+                <span className="flex-1">{t("costPlan", { count: dates.length })}</span>
+                <span className="font-semibold tabular-nums">{formatPen(allCost.total, { approx: !allCost.complete, decimals: 0 })}</span>
+              </div>
+            )}
+            <p className="mt-1 pl-6 text-xs text-muted-foreground">{t("costHint")}</p>
+          </div>
+        )}
       </section>
 
       {/* Franjas del día */}
@@ -283,6 +302,7 @@ function SlotCard({
             {t("servingNote", { portion: formatPortion(serving.portion), kcal: serving.kcal })}
             {card.time != null && ` · ${card.time} min`}
             {card.total > 0 && ` · ${t("haveCount", { have: card.have, total: card.total })}`}
+            {card.cost != null && ` · ${t("dishCost", { cost: formatPen(card.cost, { approx: card.costComplete === false }) })}`}
           </p>
           {card.protein != null && <MacroStack macros={serving} className="mt-2" />}
         </div>

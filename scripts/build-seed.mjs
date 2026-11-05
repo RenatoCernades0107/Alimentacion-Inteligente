@@ -4,7 +4,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { foods } from "../supabase/data/foods.mjs";
 import { recipes } from "../supabase/data/recipes.mjs";
 import { macros, nutrition } from "../supabase/data/nutrition.mjs";
-import { kcalPerServing } from "../src/lib/nutrition.ts";
+import { prices } from "../supabase/data/prices.mjs";
+import { kcalPerServing, toGrams } from "../src/lib/nutrition.ts";
 
 const q = (v) => (v === null || v === undefined ? "null" : `'${String(v).replaceAll("'", "''")}'`);
 const arr = (a) => `array[${a.map(q).join(", ")}]::text[]`;
@@ -25,21 +26,37 @@ const nutritionOf = (key) => {
   };
 };
 const num = (v) => (v === null || v === undefined ? "null" : String(v));
+const round = (v, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
+
+// Precio estimado (prices.mjs: S/ por kg, por litro o por unidad según la unidad del alimento) → S/ por kg.
+const BASIS = { g: [1, "kg"], kg: [1, "kg"], ml: [1, "l"], l: [1, "l"], unit: [1, "unit"] };
+const estPerKg = (key) => {
+  const price = prices[key];
+  const unit = foodByKey.get(key)?.[7];
+  if (price == null || !unit) return null;
+  const grams = toGrams(nutritionOf(key), ...BASIS[unit]);
+  if (!grams) {
+    errors.push(`${key}: no se puede pasar el precio a kg (falta el peso por unidad)`);
+    return null;
+  }
+  return round((price / grams) * 1000, 4);
+};
 
 let sql = "-- Generado por scripts/build-seed.mjs. No editar a mano.\n\n";
 
-sql += "insert into foods (key, name_es, name_en, category, emoji, image_url, shelf_life_days, default_unit, aliases, kcal_100g, g_per_unit, g_per_ml, protein_100g, carbs_100g, fat_100g) values\n";
+sql += "insert into foods (key, name_es, name_en, category, emoji, image_url, shelf_life_days, default_unit, aliases, kcal_100g, g_per_unit, g_per_ml, protein_100g, carbs_100g, fat_100g, est_pen_per_kg) values\n";
 sql += foods
   .map(([key, es, en, cat, emoji, mealdb, days, unit, aliases]) => {
     const n = nutritionOf(key);
-    return `  (${q(key)}, ${q(es)}, ${q(en)}, ${q(cat)}, ${q(emoji)}, ${q(img(mealdb))}, ${days}, ${q(unit)}, ${arr(aliases)}, ${num(n.kcal_100g)}, ${num(n.g_per_unit)}, ${num(n.g_per_ml ?? 1)}, ${num(n.protein_100g)}, ${num(n.carbs_100g)}, ${num(n.fat_100g)})`;
+    return `  (${q(key)}, ${q(es)}, ${q(en)}, ${q(cat)}, ${q(emoji)}, ${q(img(mealdb))}, ${days}, ${q(unit)}, ${arr(aliases)}, ${num(n.kcal_100g)}, ${num(n.g_per_unit)}, ${num(n.g_per_ml ?? 1)}, ${num(n.protein_100g)}, ${num(n.carbs_100g)}, ${num(n.fat_100g)}, ${num(estPerKg(key))})`;
   })
   .join(",\n");
 sql += "\non conflict (key) do update set name_es = excluded.name_es, name_en = excluded.name_en, category = excluded.category,\n";
 sql += "  emoji = excluded.emoji, image_url = excluded.image_url, shelf_life_days = excluded.shelf_life_days,\n";
 sql += "  default_unit = excluded.default_unit, aliases = excluded.aliases,\n";
 sql += "  kcal_100g = excluded.kcal_100g, g_per_unit = excluded.g_per_unit, g_per_ml = excluded.g_per_ml,\n";
-sql += "  protein_100g = excluded.protein_100g, carbs_100g = excluded.carbs_100g, fat_100g = excluded.fat_100g;\n\n";
+sql += "  protein_100g = excluded.protein_100g, carbs_100g = excluded.carbs_100g, fat_100g = excluded.fat_100g,\n";
+sql += "  est_pen_per_kg = excluded.est_pen_per_kg;\n\n";
 
 for (const r of recipes) {
   // kcal por porción: suma de los ingredientes obligatorios (en la unidad por defecto de cada alimento).
@@ -48,6 +65,7 @@ for (const r of recipes) {
     r.servings,
   );
   if (!kcal.complete) errors.push(`${r.slug}: falta la nutrición de algún ingrediente obligatorio`);
+  for (const [key, , opt] of r.ing) if (!opt && prices[key] == null) errors.push(`${r.slug}: falta el precio de "${key}" (supabase/data/prices.mjs)`);
 
   sql += `insert into recipes (slug, country, name_es, name_en, description_es, description_en, emoji, image_url, meal_types, servings, time_minutes, source_url, steps_es, steps_en, kcal_per_serving, kcal_complete) values (\n`;
   sql += `  ${q(r.slug)}, ${q(r.country)}, ${q(r.es)}, ${q(r.en)}, ${q(r.descEs)}, ${q(r.descEn)}, ${q(r.emoji)}, ${q(recipeImg(r.slug))}, ${arr(r.meals)}, ${r.servings}, ${r.time ?? "null"}, ${q(r.source)},\n`;
@@ -77,18 +95,56 @@ const storeProducts = existsSync(storeFile) ? JSON.parse(readFileSync(storeFile,
 if (storeProducts.length) {
   sql += "delete from store_products where country = 'PE';\n";
   for (let i = 0; i < storeProducts.length; i += 200) {
-    sql += "insert into store_products (country, name, brand, barcodes, quantity, unit, pack, image_url, food_id, stores, store_urls)\n";
-    sql += "select 'PE', v.name, v.brand, v.barcodes, v.quantity, v.unit, v.pack, v.image_url, f.id, v.stores, v.store_urls::jsonb from (values\n";
+    sql += "insert into store_products (country, name, brand, barcodes, quantity, unit, pack, image_url, food_id, stores, store_urls, prices)\n";
+    sql += "select 'PE', v.name, v.brand, v.barcodes, v.quantity, v.unit, v.pack, v.image_url, f.id, v.stores, v.store_urls::jsonb, v.prices::jsonb from (values\n";
     sql += storeProducts
       .slice(i, i + 200)
       .map((p) => {
         if (!foodByKey.has(p.food)) errors.push(`producto "${p.name}": alimento desconocido "${p.food}"`);
         const urls = Object.fromEntries(p.stores.map((s) => [s.store, s.url]));
-        return `  (${q(p.name)}, ${q(p.brand)}, ${arr(p.barcodes)}, ${p.quantity ?? "null"}::numeric, ${q(p.unit)}, ${p.pack}, ${q(p.image)}, ${q(p.food)}, ${arr(p.stores.map((s) => s.store))}, ${q(JSON.stringify(urls))})`;
+        const productPrices = Object.fromEntries(p.stores.filter((s) => s.price > 0).map((s) => [s.store, s.price]));
+        return `  (${q(p.name)}, ${q(p.brand)}, ${arr(p.barcodes)}, ${p.quantity ?? "null"}::numeric, ${q(p.unit)}, ${p.pack}, ${q(p.image)}, ${q(p.food)}, ${arr(p.stores.map((s) => s.store))}, ${q(JSON.stringify(urls))}, ${q(JSON.stringify(productPrices))})`;
       })
       .join(",\n");
-    sql += "\n) as v(name, brand, barcodes, quantity, unit, pack, image_url, food_key, stores, store_urls)\nleft join foods f on f.key = v.food_key;\n\n";
+    sql += "\n) as v(name, brand, barcodes, quantity, unit, pack, image_url, food_key, stores, store_urls, prices)\nleft join foods f on f.key = v.food_key;\n\n";
   }
+}
+
+// Precio por kg de cada alimento en cada tienda: mediana de sus productos con precio y tamaño conocido.
+// Se descartan los que se alejan mucho del estimado (packs mal leídos, productos premium o de otra cosa).
+const PRICE_STORES = new Set(["plazavea", "wong", "metro", "tottus"]);
+const MIN_PRODUCTS = 2;
+const perKg = new Map(); // "food|store" → [S/ por kg]
+for (const p of storeProducts) {
+  if (!p.food) continue;
+  // Sin tamaño, un pack de un alimento que se cuenta por unidades ("Huevos x15") vale por sus unidades.
+  const byUnits = !p.quantity && p.pack > 1 && foodByKey.get(p.food)?.[7] === "unit";
+  if (!byUnits && (!p.quantity || !p.unit)) continue;
+  const grams = byUnits ? toGrams(nutritionOf(p.food), p.pack, "unit") : toGrams(nutritionOf(p.food), p.quantity * (p.pack || 1), p.unit);
+  const est = estPerKg(p.food);
+  if (!grams) continue;
+  for (const s of p.stores) {
+    if (!PRICE_STORES.has(s.store) || !(s.price > 0)) continue;
+    const v = (s.price / grams) * 1000;
+    if (est && (v < est / 4 || v > est * 4)) continue;
+    const k = `${p.food}|${s.store}`;
+    perKg.set(k, [...(perKg.get(k) ?? []), v]);
+  }
+}
+const median = (a) => {
+  const s = [...a].sort((x, y) => x - y);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const storePrices = [...perKg]
+  .filter(([, values]) => values.length >= MIN_PRODUCTS)
+  .map(([k, values]) => [...k.split("|"), round(median(values), 4), values.length]);
+sql += "delete from food_store_prices where food_id in (select id from foods where key is not null);\n";
+if (storePrices.length) {
+  sql += "insert into food_store_prices (food_id, store, pen_per_kg, products)\n";
+  sql += "select f.id, v.store, v.pen_per_kg, v.products from (values\n";
+  sql += storePrices.map(([food, store, price, n]) => `  (${q(food)}, ${q(store)}, ${price}::numeric, ${n})`).join(",\n");
+  sql += "\n) as v(food_key, store, pen_per_kg, products)\njoin foods f on f.key = v.food_key;\n\n";
 }
 
 if (errors.length) {
@@ -97,4 +153,4 @@ if (errors.length) {
 }
 
 writeFileSync(new URL("../supabase/seed.sql", import.meta.url), sql);
-console.log(`seed.sql: ${foods.length} alimentos, ${recipes.length} recetas (${recipes.filter((r) => r.country === "PE").length} PE / ${recipes.filter((r) => r.country === "US").length} US), ${storeProducts.length} productos de supermercados`);
+console.log(`seed.sql: ${foods.length} alimentos, ${recipes.length} recetas (${recipes.filter((r) => r.country === "PE").length} PE / ${recipes.filter((r) => r.country === "US").length} US), ${storeProducts.length} productos de supermercados, ${storePrices.length} precios por alimento y tienda`);

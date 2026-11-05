@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ArrowLeft, Check, Clock, ExternalLink, Flame, GitBranch, Users } from "lucide-react";
+import { ArrowLeft, Check, Clock, ExternalLink, Flame, GitBranch, Users, Wallet } from "lucide-react";
 import { requireMember } from "@/lib/session";
 import { todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
 import { loadMemberNames, RECIPE_SELECT, sortIngredients, type RecipeIngredientRow } from "@/lib/recipes";
 import { formatQuantity } from "@/lib/units";
 import { macrosPerServing } from "@/lib/nutrition";
+import { formatPen, loadPrices, recipeCost } from "@/lib/cost";
+import { STORES } from "@/lib/stores";
 import { FoodImage } from "@/components/food-image";
 import { RecipeImage } from "@/components/recipe-image";
 import { AddRecipeToCalendar } from "@/components/meals/add-recipe-to-calendar";
@@ -28,9 +30,11 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
   const tc = await getTranslations("countries");
   const locale = await getLocale();
 
-  const [{ data }, { data: inventory }] = await Promise.all([
+  const store = family.store ?? "plazavea";
+  const [{ data }, { data: inventory }, prices] = await Promise.all([
     supabase.from("recipes").select(RECIPE_SELECT).eq("slug", slug).maybeSingle(),
     supabase.from("inventory_items").select("food_id").eq("family_id", family.id).gt("quantity", 0),
+    loadPrices(supabase, store),
   ]);
   if (!data) notFound();
   const recipe = data as Recipe;
@@ -62,6 +66,10 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
     ingredients.filter((i) => i.food).map((i) => ({ quantity: i.quantity, unit: i.unit, optional: i.optional, food: i.food! })),
     recipe.servings,
   );
+  // Costo con los precios de la tienda de la familia (no se muestra si no hay precios).
+  const cost = prices.size
+    ? recipeCost(ingredients.filter((i) => i.food).map((i) => ({ ...i, food: i.food! })), prices, recipe.servings)
+    : null;
   const steps = locale === "en" ? recipe.steps_en : recipe.steps_es;
   const slots = slotsFor(family.meals_per_day);
   const defaultSlot = slots.find((s) => recipe.meal_types.includes(s)) ?? (recipe.meal_types.includes("snack") ? slots.find((s) => s.includes("snack")) : undefined) ?? slots[0];
@@ -116,7 +124,18 @@ export default async function RecipePage({ params }: PageProps<"/recipes/[slug]"
           {recipe.kcal_per_serving ? (
             <span className="inline-flex items-center gap-1 tabular-nums"><Flame className="size-4" /> {t("kcal", { kcal: recipe.kcal_per_serving })}</span>
           ) : null}
+          {cost && cost.total > 0 && (
+            <span className="inline-flex items-center gap-1 tabular-nums">
+              <Wallet className="size-4" /> {t("costPerServing", { cost: formatPen(cost.perServing, { approx: !cost.complete }) })}
+            </span>
+          )}
         </div>
+        {cost && cost.total > 0 && (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {t("costTotal", { cost: formatPen(cost.total, { approx: !cost.complete }), store: STORES[store].name })}
+            {!cost.complete && <> · {t("costIncomplete")}</>}
+          </p>
+        )}
         {macros.complete && (
           <div className="w-full max-w-sm pt-1">
             <MacroStack macros={macros} />

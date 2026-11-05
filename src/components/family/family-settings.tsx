@@ -8,13 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/native-select";
 import { setLocale, signOut, updateFamilySettings } from "@/app/actions/family";
+import { PRICE_STORES, STORES } from "@/lib/stores";
+import type { PriceStore } from "@/lib/types";
 
 export function FamilySettings({
-  isParent, mealsPerDay, locale,
+  isParent, mealsPerDay, store, locale,
 }: {
   isParent: boolean;
   familyName: string;
   mealsPerDay: number;
+  store: PriceStore;
   locale: "es" | "en";
 }) {
   const t = useTranslations("family");
@@ -45,6 +48,20 @@ export function FamilySettings({
           >
             {[3, 4, 5].map((n) => <option key={n} value={n}>{to("mealsOption", { count: n })}</option>)}
           </NativeSelect>
+        </div>
+      )}
+      {isParent && (
+        <div className="space-y-2">
+          <Label htmlFor="store">{t("store")}</Label>
+          <NativeSelect
+            id="store"
+            defaultValue={store}
+            disabled={pending}
+            onChange={(e) => run(() => updateFamilySettings({ store: e.target.value as PriceStore }))}
+          >
+            {PRICE_STORES.map((s) => <option key={s} value={s}>{STORES[s].name}</option>)}
+          </NativeSelect>
+          <p className="text-xs text-muted-foreground">{t("storeHint")}</p>
         </div>
       )}
       <div className="space-y-2">

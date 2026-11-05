@@ -1,14 +1,18 @@
 import type { OffProduct } from "./off";
-import type { Unit } from "./types";
+import type { PriceStore, Unit } from "./types";
 
-export type StoreId = "plazavea" | "wong" | "tottus" | "tambo";
+export type StoreId = "plazavea" | "wong" | "metro" | "tottus" | "tambo";
 
 export const STORES: Record<StoreId, { name: string; className: string }> = {
   plazavea: { name: "Plaza Vea", className: "bg-red-100 text-red-700" },
   wong: { name: "Wong", className: "bg-rose-100 text-rose-800" },
+  metro: { name: "Metro", className: "bg-yellow-100 text-yellow-800" },
   tottus: { name: "Tottus", className: "bg-green-100 text-green-800" },
   tambo: { name: "Tambo", className: "bg-purple-100 text-purple-800" },
 };
+
+/** Tiendas que la familia puede elegir para los precios (src/lib/cost.ts), en el orden del selector. */
+export const PRICE_STORES = ["plazavea", "wong", "metro", "tottus"] as const satisfies readonly PriceStore[];
 
 /** Fila de la tabla store_products. */
 export type StoreProduct = {

@@ -5,6 +5,9 @@ import { materializeSeries } from "@/lib/calendar";
 import { addDays, isValidDate, startOfWeek, todayIn } from "@/lib/dates";
 import { slotsFor } from "@/lib/meals";
 import { loadMyTarget } from "@/lib/my-target";
+import { loadPrices } from "@/lib/cost";
+import { costsRecord, loadMealCosts } from "@/lib/meal-costs";
+import { STORES } from "@/lib/stores";
 import { MemberAvatar } from "@/components/family/member-avatar";
 import { CalendarView } from "@/components/meals/calendar-view";
 import { DownloadPlan } from "@/components/meals/download-plan";
@@ -26,7 +29,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   await materializeSeries(family.id, weekEnd > addDays(today, 14) ? weekEnd : addDays(today, 14));
 
   const mealSelect = "*, recipe:recipes(id, slug, name_es, name_en, emoji, image_url, servings, kcal_per_serving, kcal_complete), series:meal_series(recurrence), proposer:profiles!meals_proposed_by_fkey(full_name)";
-  const [{ data: meals }, { data: recipes }, { data: nearby }, { data: proposals }, { data: pending }, { data: expiring }, myTarget] = await Promise.all([
+  const store = family.store ?? "plazavea";
+  const [{ data: meals }, { data: recipes }, { data: nearby }, { data: proposals }, { data: pending }, { data: expiring }, myTarget, prices] = await Promise.all([
     supabase.from("meals").select(mealSelect).eq("family_id", family.id).gte("date", weekStart).lte("date", weekEnd).neq("status", "cancelled").order("created_at"),
     supabase.from("recipes").select("id, slug, name_es, name_en, emoji, image_url, meal_types, country, family_id").order("name_es"),
     // Días con comidas alrededor de la semana, para marcarlos en el selector de mes.
@@ -40,7 +44,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     supabase.from("inventory_items").select("*, food:foods(*)").eq("family_id", family.id).not("expires_on", "is", null).lte("expires_on", addDays(today, 7)).order("expires_on"),
     // Solo los datos propios (RLS): la barra de progreso muestra la meta de quien mira.
     loadMyTarget(supabase, user.id, family.timezone),
+    loadPrices(supabase, store),
   ]);
+  // Costo de cada comida de la semana con los precios de la tienda de la familia.
+  const costs = costsRecord(await loadMealCosts(supabase, (meals ?? []) as Meal[], prices));
 
   const mealDates = [...new Set((nearby ?? []).map((m) => m.date as string))];
   const slots = slotsFor(family.meals_per_day);
@@ -84,6 +91,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         myKcal={myTarget.kcal}
         myState={myTarget.state}
         canEditData={myTarget.canEdit}
+        costs={costs}
+        storeName={STORES[store].name}
       />
     </>
   );

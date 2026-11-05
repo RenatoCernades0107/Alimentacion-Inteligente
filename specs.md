@@ -55,6 +55,11 @@ App PWA (inicialmente para celular) optimizada para iPhone, cuya misión es gest
    - El plan muestra por día las kcal y los macros frente a la meta; se ajusta conversando o cambiando platos, y se pasa al calendario (los hijos lo envían como propuestas).
    - Solo usa recetas del catálogo de la familia; las recetas sin foto obtienen una generada con IA.
 
+11. **Costo de los platos y del plan.** Cada alimento tiene precio según la tienda que elige la familia (Plaza Vea, Wong, Metro o Tottus).
+   - El precio de un alimento es la mediana del precio por kg de sus productos en esa tienda; si la tienda no lo tiene, el de las otras tiendas y, si ninguna, un precio estimado.
+   - El costo de un plato es la suma de sus ingredientes obligatorios; el de una comida del calendario, la receta completa por su multiplicador de porciones. El costo de la semana suma las comidas planificadas y completadas (las propuestas no cuentan).
+   - Se ve en la receta (total y por porción), en el calendario (por comida, por día y de la semana), en el plan del Chef IA y en el PDF del plan.
+
 ## Requerimientos no funcionales
 
 1. Hay dos tipos de usuario: padres e hijos. Los hijos solo tienen permiso de lectura, excepto para proponer comidas. Además, los padres administran a los integrantes sin cuenta.

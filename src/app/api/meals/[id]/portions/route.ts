@@ -3,7 +3,9 @@ import { getSession } from "@/lib/session";
 import { loadMealItems } from "@/lib/meal-items";
 import { loadFamilyTargets } from "@/lib/family-targets";
 import { kcalPerServing, macrosPerServing, type Macros } from "@/lib/nutrition";
-import { buildPortions } from "@/lib/portions";
+import { buildPortions, type PortionsData } from "@/lib/portions";
+import { loadPrices, recipeCost } from "@/lib/cost";
+import { STORES } from "@/lib/stores";
 import type { MealSlot } from "@/lib/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -40,9 +42,15 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/meals/[
   let complete = true;
   let optionalKcal = 0;
   let macros: Macros | null = null;
+  let cost: PortionsData["cost"] = null;
   if (meal.recipe) {
     // Con los ingredientes efectivos de la comida (los editados, si los hay).
-    const { items } = await loadMealItems(supabase, meal.id);
+    const store = family.store ?? "plazavea";
+    const [{ items }, prices] = await Promise.all([loadMealItems(supabase, meal.id), loadPrices(supabase, store)]);
+    if (prices.size) {
+      const c = recipeCost(items, prices, meal.recipe.servings);
+      if (c.total > 0) cost = { recipeTotal: c.total, perServing: c.perServing, complete: c.complete, store: STORES[store].name };
+    }
     const r = kcalPerServing(items, meal.recipe.servings);
     perServing = r.kcal;
     complete = r.complete;
@@ -77,5 +85,5 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/meals/[
     scale: Number(meal.portion_scale) || 1,
     siblings: 1 + (others ?? 0),
   });
-  return NextResponse.json(portions, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ...portions, cost } satisfies PortionsData, { headers: { "Cache-Control": "no-store" } });
 }

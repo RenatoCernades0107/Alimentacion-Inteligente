@@ -32,7 +32,7 @@ export async function shareChefDraft(draftId: string): Promise<ShareInfo> {
   if (!row || !draft) throw new Error("not found");
 
   const locale = (await getLocale()) === "en" ? "en" : "es";
-  const { cards } = await loadChefData(supabase, family.id, todayIn(family.timezone), locale);
+  const { cards } = await loadChefData(supabase, family.id, todayIn(family.timezone), locale, false, family.store);
   // Las recetas nuevas del Chef viajan en el borrador; en el link no van datos del inventario.
   const byId = new Map([...cards, ...Object.values(draft.custom).map((d) => d.card)].map((c) => [c.id, c]));
   const custom = Object.fromEntries(

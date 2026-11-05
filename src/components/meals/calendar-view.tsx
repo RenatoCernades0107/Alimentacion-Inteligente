@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { enUS, es } from "react-day-picker/locale";
-import { Apple, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Cookie, Moon, Plus, Repeat, Soup, type LucideIcon } from "lucide-react";
+import { Apple, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Cookie, Moon, Plus, Repeat, Soup, Wallet, type LucideIcon } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,6 +16,7 @@ import { KcalChip } from "@/components/meals/kcal-chip";
 import { DayGoal } from "@/components/meals/day-goal";
 import { addDays, fromLocal, parseDate, toLocal } from "@/lib/dates";
 import { slotSiblings } from "@/lib/meals";
+import { formatPen, sumCosts, type Cost } from "@/lib/cost";
 import { mealName, type Meal, type MealSlot } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +30,7 @@ const SLOT_STYLE: Record<MealSlot, { icon: LucideIcon; chip: string }> = {
 };
 
 export function CalendarView({
-  date, today, weekStart, meals, mealDates, recipes, slots, isParent, mealsPerDay, myKcal, myState, canEditData,
+  date, today, weekStart, meals, mealDates, recipes, slots, isParent, mealsPerDay, myKcal, myState, canEditData, costs = {}, storeName,
 }: {
   date: string;
   today: string;
@@ -46,6 +47,9 @@ export function CalendarView({
   myState: "ok" | "incomplete" | "infant";
   /** Puede completar sus propios datos (un hijo menor no). */
   canEditData: boolean;
+  /** Costo de cada comida (id → costo) con los precios de la tienda de la familia; vacío si no hay precios. */
+  costs?: Record<string, Pick<Cost, "total" | "complete">>;
+  storeName?: string;
 }) {
   const t = useTranslations("calendar");
   const ts = useTranslations("slots");
@@ -66,6 +70,10 @@ export function CalendarView({
   const dayMeals = meals.filter((m) => m.date === date);
   const plannedSlots = slots.filter((s) => dayMeals.some((m) => m.slot === s)).length;
   const onToday = date === today;
+  // Costo: lo que se cocina (planificadas y completadas); las propuestas no cuentan hasta aceptarse.
+  const counted = (m: Meal) => m.status === "planned" || m.status === "completed";
+  const weekCost = sumCosts(meals.filter(counted).map((m) => costs[m.id]));
+  const dayCost = sumCosts(dayMeals.filter(counted).map((m) => costs[m.id]));
 
   return (
     <>
@@ -158,6 +166,20 @@ export function CalendarView({
         </Link>
       </div>
 
+      {/* Costo de la semana */}
+      {weekCost.count > 0 && (
+        <div className="mt-2 flex items-center gap-3 rounded-2xl border bg-card px-3 py-2">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <Wallet className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">{t("weekCost")}</span>
+            <span className="block truncate text-xs text-muted-foreground">{t("weekCostHint", { count: weekCost.count, store: storeName ?? "" })}</span>
+          </span>
+          <span className="text-lg font-bold tabular-nums">{formatPen(weekCost.total, { approx: !weekCost.complete, decimals: 0 })}</span>
+        </div>
+      )}
+
       {/* Resumen del día */}
       <div className="mt-5 flex items-end justify-between gap-3">
         <div>
@@ -169,6 +191,9 @@ export function CalendarView({
           <span className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
             <span className="block h-full rounded-full bg-primary transition-all" style={{ width: `${(plannedSlots / slots.length) * 100}%` }} />
           </span>
+          {dayCost.count > 0 && (
+            <span className="text-xs text-muted-foreground tabular-nums">{t("dayCost", { cost: formatPen(dayCost.total, { approx: !dayCost.complete }) })}</span>
+          )}
         </div>
       </div>
 
@@ -244,6 +269,9 @@ export function CalendarView({
                             {m.status === "proposed" && <span className="rounded-full bg-amber-200 px-2 py-0.5 font-medium text-amber-900">{t("proposed")}</span>}
                             {m.status === "completed" && <span className="font-medium text-primary">{t("completed")}</span>}
                             <KcalChip meal={m} siblings={slotSiblings(m, dayMeals)} myKcal={myKcal} mealsPerDay={mealsPerDay} />
+                            {costs[m.id] && costs[m.id].total > 0 && (
+                              <span className="tabular-nums">{formatPen(costs[m.id].total, { approx: !costs[m.id].complete })}</span>
+                            )}
                             {m.series_id && (
                               <span className="inline-flex items-center gap-1">
                                 <Repeat className="size-3" /> {t("repeats")}

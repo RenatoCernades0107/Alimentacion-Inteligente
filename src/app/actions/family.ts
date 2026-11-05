@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession, requireMember, requireParent } from "@/lib/session";
 import { isAvatarId } from "@/lib/avatars";
-import type { Role } from "@/lib/types";
+import { PRICE_STORES } from "@/lib/stores";
+import type { PriceStore, Role } from "@/lib/types";
 
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
@@ -58,11 +59,12 @@ export async function setLocale(locale: "es" | "en") {
   revalidatePath("/", "layout");
 }
 
-export async function updateFamilySettings(input: { name?: string; meals_per_day?: number }) {
+export async function updateFamilySettings(input: { name?: string; meals_per_day?: number; store?: PriceStore }) {
   const { supabase, family } = await requireParent();
   const patch: Record<string, unknown> = {};
   if (input.name?.trim()) patch.name = input.name.trim().slice(0, 60);
   if (input.meals_per_day && [3, 4, 5].includes(input.meals_per_day)) patch.meals_per_day = input.meals_per_day;
+  if (input.store && (PRICE_STORES as readonly string[]).includes(input.store)) patch.store = input.store;
   const { error } = await supabase.from("families").update(patch).eq("id", family.id);
   if (error) throw new Error(error.message);
   revalidatePath("/", "layout");

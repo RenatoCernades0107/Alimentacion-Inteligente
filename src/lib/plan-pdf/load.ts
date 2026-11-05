@@ -4,12 +4,14 @@ import { materializeSeries } from "@/lib/calendar";
 import { todayIn } from "@/lib/dates";
 import { ALL_SLOTS, slotsFor } from "@/lib/meals";
 import { localName, type Country, type Family, type MealSlot, type MealStatus, type Unit } from "@/lib/types";
+import { loadPrices, mealCost, recipeCost, type PriceMap } from "@/lib/cost";
+import { STORES } from "@/lib/stores";
 import { loadPhoto } from "./photos";
 import { buildShoppingList, type Need, type StockRow } from "./shopping";
 import type { PlanData, PlanItem, PlanMeal, PlanRecipe } from "./types";
 import photoCredits from "../../../public/recipes/CREDITS.json";
 
-type FoodRef = { id: string; name_es: string; name_en: string; category: string };
+type FoodRef = { id: string; name_es: string; name_en: string; category: string; g_per_unit: number | null; g_per_ml: number | null };
 /** Ingrediente de una comida (de la receta o editado); `meal_id` / `series_id` / `recipe_id` dicen de dónde salió. */
 type ItemRow = {
   food_id: string;
@@ -44,6 +46,7 @@ type MealRow = {
   title: string | null;
   recipe_id: string | null;
   series_id: string | null;
+  portion_scale: number | null;
   recipe: RecipeRow | null;
   /** Solo existen si la base tiene la migración de ingredientes editables. */
   custom_items?: boolean;
@@ -52,10 +55,10 @@ type MealRow = {
 type Locale = "es" | "en";
 
 const MEAL_COLS =
-  "id, date, slot, status, title, recipe_id, series_id, " +
+  "id, date, slot, status, title, recipe_id, series_id, portion_scale, " +
   "recipe:recipes(slug, country, name_es, name_en, description_es, description_en, image_url, time_minutes, servings, source_url, steps_es, steps_en)";
 const EDIT_COLS = ", custom_items, series:meal_series(recipe_id, custom_items)";
-const ITEM_COLS = "food_id, quantity, unit, optional, food:foods(id, name_es, name_en, category)";
+const ITEM_COLS = "food_id, quantity, unit, optional, food:foods(id, name_es, name_en, category, g_per_unit, g_per_ml)";
 
 /**
  * Reúne todo lo que lleva el PDF: las comidas de los días elegidos con su receta, foto e ingredientes
@@ -83,7 +86,8 @@ export async function loadPlanData(args: {
   const rows = (await loadMeals(supabase, family.id, dates))
     .filter((m) => slots.includes(m.slot))
     .sort((a, b) => a.date.localeCompare(b.date) || ALL_SLOTS.indexOf(a.slot) - ALL_SLOTS.indexOf(b.slot));
-  const itemRows = await loadItems(supabase, rows);
+  const store = family.store ?? "plazavea";
+  const [itemRows, prices] = await Promise.all([loadItems(supabase, rows), loadPrices(supabase, store)]);
   const photos = args.plan ? await loadPhotos(rows, args.origin) : new Map<string, Buffer | null>();
 
   const meals: PlanMeal[] = rows.map((m) => ({
@@ -94,6 +98,7 @@ export async function loadPlanData(args: {
     name: m.recipe ? localName(m.recipe, locale) : (m.title ?? ""),
     recipe: m.recipe ? toRecipe(m.recipe, locale, photos.get(m.recipe.image_url ?? "") ?? null) : null,
     items: (itemRows.get(m.id) ?? []).map((r) => toPlanItem(r, locale)),
+    cost: costOf(m, itemRows.get(m.id) ?? [], prices),
   }));
 
   return {
@@ -105,7 +110,15 @@ export async function loadPlanData(args: {
     meals,
     showPlan: args.plan,
     shopping: args.shopping ? await buildShopping(supabase, family.id, meals, itemRows, today, locale) : null,
+    storeName: STORES[store].name,
   };
+}
+
+/** Lo que cuesta cocinar la comida con los precios de la tienda: receta × multiplicador de porciones. */
+function costOf(m: MealRow, items: ItemRow[], prices: PriceMap): PlanMeal["cost"] {
+  if (!m.recipe || !prices.size) return null;
+  const c = mealCost(recipeCost(items.map((r) => ({ ...r, food: r.food! })), prices, m.recipe.servings), Number(m.portion_scale) || 1);
+  return c.total > 0 ? { total: c.total, complete: c.complete } : null;
 }
 
 async function loadMeals(supabase: SupabaseClient, familyId: string, dates: string[]) {
